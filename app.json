@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Météo Pluie",
+    "slug": "meteo-pluie",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.loris29p.meteopluie",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Ta position sert à afficher la météo et la pluie là où tu es."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.loris29p.meteopluie"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Ta position sert à afficher la météo et la pluie là où tu es."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "scheme": "meteopluie"
+  }
+}
