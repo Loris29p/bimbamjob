@@ -36,9 +36,33 @@ Une notification te prévient quand de la pluie arrive dans l'heure. Pour l'inst
    ```
 4. Relance `npx expo start`.
 
-## Publier sur les stores
+## Mettre l'app sur TestFlight (Mac + Xcode)
 
-Avec [EAS](https://docs.expo.dev/eas/) : `npx eas-cli build` puis `npx eas-cli submit`. Il faut un compte Apple Developer (99 €/an) et un compte Google Play Console (25 € une fois).
+Il faut un Mac avec Xcode et un compte Apple Developer.
+
+**Une seule fois, au début :**
+1. Sur [App Store Connect](https://appstoreconnect.apple.com) : **Apps → + → Nouvelle app**.
+   - Plateforme : iOS
+   - Nom : Météo Pluie (ou un autre nom libre sur l'App Store)
+   - Identifiant de lot (bundle ID) : `com.loris29p.meteopluie`. S'il n'apparaît pas dans la liste, crée-le dans
+     [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list), ou laisse Xcode le créer (étape 4) puis reviens ici.
+   - SKU : `meteopluie`
+
+**À chaque nouvelle version :**
+1. `npm install`
+2. (si tu utilises les vigilances) vérifie que le fichier `.env` contient ta clé Météo-France
+3. `npm run ios:xcode` : génère le projet iOS natif (dossier `ios/`, recréé à chaque fois, ne pas le modifier à la main) et l'ouvre dans Xcode
+4. Dans Xcode, clique sur **MeteoPluie** (à gauche), onglet **Signing & Capabilities** :
+   coche **Automatically manage signing** et choisis ton **Team**.
+5. En haut, choisis la cible **Any iOS Device (arm64)**.
+6. Menu **Product → Archive**. Ça prend quelques minutes.
+7. Dans la fenêtre Organizer qui s'ouvre : **Distribute App → App Store Connect → Distribute**.
+8. Après 10 à 30 min de traitement, le build apparaît dans App Store Connect, onglet **TestFlight**.
+   Ajoute-toi comme testeur interne et installe-le avec l'app TestFlight sur ton iPhone.
+
+Pour envoyer une nouvelle version, augmente `version` et/ou `ios.buildNumber` dans `app.json` (Apple refuse deux builds avec le même numéro), puis refais les étapes 3 à 8.
+
+Sans Mac, la même chose est possible via le service de build en ligne d'Expo : `npx eas-cli build --platform ios --auto-submit`.
 
 ## Structure du code
 

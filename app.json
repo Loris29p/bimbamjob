@@ -11,6 +11,10 @@
       "bundleIdentifier": "com.loris29p.meteopluie",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Ta position sert à afficher la météo et la pluie là où tu es."
+      },
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
@@ -21,7 +25,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.loris29p.meteopluie"
+      "package": "com.loris29p.meteopluie",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
