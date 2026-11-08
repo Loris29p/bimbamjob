@@ -62,7 +62,26 @@ Il faut un Mac avec Xcode et un compte Apple Developer.
 
 Pour envoyer une nouvelle version, augmente `version` et/ou `ios.buildNumber` dans `app.json` (Apple refuse deux builds avec le même numéro), puis refais les étapes 3 à 8.
 
-Sans Mac, la même chose est possible via le service de build en ligne d'Expo : `npx eas-cli build --platform ios --auto-submit`.
+## Mettre l'app sur TestFlight avec Expo (EAS), sans Xcode
+
+Le build et l'envoi se font sur les serveurs d'Expo. Gratuit dans la limite de quelques builds par mois.
+
+**Une seule fois, au début :**
+1. Crée un compte gratuit sur https://expo.dev, puis `npx eas-cli@latest login`.
+2. `npx eas-cli@latest init` : relie le projet à ton compte Expo (ajoute un `projectId` dans `app.json`, à committer).
+3. (si tu utilises les vigilances) enregistre ta clé chez Expo, car le fichier `.env` n'est pas envoyé au build :
+   ```bash
+   npx eas-cli@latest env:create --name EXPO_PUBLIC_METEOFRANCE_API_KEY --value ta_cle --environment production --visibility sensitive
+   ```
+
+**À chaque nouvelle version :**
+```bash
+npx eas-cli@latest build --platform ios --profile production --auto-submit
+```
+EAS te demande tes identifiants Apple la première fois, crée les certificats, construit l'app, puis l'envoie sur App Store Connect.
+Le numéro de build augmente tout seul. Après le traitement d'Apple (10 à 30 min), le build apparaît dans l'onglet **TestFlight**.
+
+Pour mettre à jour seulement le code JavaScript sans repasser par Apple, il existe aussi `eas update` (à configurer plus tard).
 
 ## Structure du code
 
