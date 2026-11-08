@@ -7,7 +7,15 @@ import type { Place } from './types';
 
 const BASE = 'https://api.open-meteo.com/v1/forecast';
 
-export type Minutely = { time: number; precipitation: number }[];
+export type QuarterPoint = {
+  time: number;
+  precipitation: number;
+  temperature: number | null;
+  windSpeed: number | null;
+  windGusts: number | null;
+  windDirection: number | null;
+};
+export type Minutely = QuarterPoint[];
 
 export type HourPoint = {
   time: number;
@@ -67,6 +75,8 @@ export type Forecast = {
   daily: DayPoint[];
   /** La veille (pour les comparaisons), si disponible */
   yesterday: DayPoint | null;
+  /** Altitude du point de grille (m), pour choisir une station de mesure comparable */
+  elevation?: number;
   fetchedAt: number;
 };
 
@@ -89,7 +99,7 @@ export async function fetchForecast(place: Place): Promise<Forecast> {
   const mfUrl =
     `${BASE}?${common}&models=meteofrance_seamless&forecast_days=4` +
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,cloud_cover,is_day' +
-    '&minutely_15=precipitation&forecast_minutely_15=12&past_minutely_15=0' +
+    '&minutely_15=precipitation,temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m&forecast_minutely_15=24&past_minutely_15=0' +
     `&hourly=${hourlyVars}&daily=${dailyVars}`;
 
   // 2) Meilleur modèle disponible : compléments + tendance 14 jours
@@ -118,7 +128,14 @@ export async function fetchForecast(place: Place): Promise<Forecast> {
   };
 
   const m = mf.minutely_15 ?? { time: [] };
-  const minutely: Minutely = ((m.time ?? []) as number[]).map((t, i) => ({ time: t, precipitation: num(m.precipitation?.[i]) }));
+  const minutely: Minutely = ((m.time ?? []) as number[]).map((t, i) => ({
+    time: t,
+    precipitation: num(m.precipitation?.[i]),
+    temperature: opt(m.temperature_2m?.[i]),
+    windSpeed: opt(m.wind_speed_10m?.[i]),
+    windGusts: opt(m.wind_gusts_10m?.[i]),
+    windDirection: opt(m.wind_direction_10m?.[i]),
+  }));
 
   // Horaire : sur toute la période du modèle « best », Météo-France prioritaire quand il existe.
   const h = mf.hourly ?? { time: [] };
@@ -176,7 +193,7 @@ export async function fetchForecast(place: Place): Promise<Forecast> {
   const daily = allDays.filter((d) => d.time >= midnight - 3600);
   const yesterday = allDays.find((d) => d.time < midnight - 3600 && d.time >= midnight - 26 * 3600) ?? null;
 
-  return { current, minutely, hourly, daily, yesterday, fetchedAt: Date.now() };
+  return { current, minutely, hourly, daily, yesterday, elevation: opt(mf.elevation) ?? undefined, fetchedAt: Date.now() };
 }
 
 export function startOfDay(unix: number) {

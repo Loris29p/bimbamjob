@@ -9,12 +9,16 @@ import { temp, time } from '../lib/format';
 import { notifyRain } from '../lib/notifications';
 import { backgroundFor } from '../lib/sky';
 import type { Place } from '../lib/types';
+import { fetchNearestObservation } from '../lib/observations';
+import { placeKey } from '../lib/types';
+import { useCached } from '../lib/useAsync';
 import { useForecast } from '../lib/useForecast';
 import { weatherLabel } from '../lib/weatherCodes';
 import { AirCard } from './AirCard';
 import { DailyCard } from './DailyCard';
 import { HourlyCard } from './HourlyCard';
 import { MoonCard } from './MoonCard';
+import { ago, ObservationCard } from './ObservationCard';
 import { RainCard } from './RainCard';
 import { Tiles } from './Tiles';
 import { DIM, T } from './ui';
@@ -34,6 +38,15 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
   const c = forecast?.current;
   const colors = c ? backgroundFor(c.weatherCode, c.isDay) : (['#2B5C9E', '#4D7FBF', '#7FA6D6'] as const);
   const today = forecast?.daily[0];
+  // Mesure réelle de la station la plus proche (rafraîchie toutes les 6 min)
+  const obs = useCached(
+    forecast ? `obs:${placeKey(place)}:${Math.floor(Date.now() / 360000)}` : null,
+    () => fetchNearestObservation(place, forecast?.elevation),
+    6 * 60 * 1000,
+  );
+  // On affiche la température mesurée si la station est proche et la mesure récente.
+  const useObs = !!obs && obs.temperature !== null && obs.distanceKm <= 15 && Date.now() / 1000 - obs.time < 45 * 60;
+  const shownTemp = useObs ? obs!.temperature! : c?.temperature;
   const scrollY = useRef(new Animated.Value(0)).current;
   const bigOpacity = scrollY.interpolate({ inputRange: [0, 110], outputRange: [1, 0], extrapolate: 'clamp' });
   const compactOpacity = scrollY.interpolate({ inputRange: [90, 140], outputRange: [0, 1], extrapolate: 'clamp' });
@@ -56,13 +69,14 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
           </T>
           {c ? (
             <>
-              <T style={styles.temp}>{temp(c.temperature)}</T>
+              <T style={styles.temp}>{temp(shownTemp ?? c.temperature)}</T>
               <T style={styles.cond}>{weatherLabel(c.weatherCode, c.isDay)}</T>
               {today ? (
                 <T style={styles.hilo}>
                   Max. {temp(today.tMax)}  Min. {temp(today.tMin)}
                 </T>
               ) : null}
+              {useObs ? <T style={styles.measured}>{`Mesurée à ${obs!.station.name} · ${ago(obs!.time)}`}</T> : null}
             </>
           ) : error ? (
             <Pressable onPress={refresh} style={styles.retry}>
@@ -78,15 +92,16 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
           <>
             <VigilanceBanner department={place.department} />
             <RainCard minutely={forecast.minutely} />
-            <HourlyCard hourly={forecast.hourly} daily={forecast.daily} />
+            <HourlyCard hourly={forecast.hourly} daily={forecast.daily} minutely={forecast.minutely} />
             <Pressable onPress={() => router.push({ pathname: '/detail', params: { metric: 'temp' } })}>
               <DailyCard daily={forecast.daily} currentTemp={forecast.current.temperature} />
             </Pressable>
+            {obs ? <ObservationCard obs={obs} /> : null}
             <AirCard place={place} />
             <Tiles forecast={forecast} />
             <MoonCard />
             <T style={styles.source}>
-              Prévisions : AROME et ARPEGE (Météo-France) · Mise à jour {time(forecast.fetchedAt / 1000)}
+              Prévisions : AROME et ARPEGE (Météo-France) · Mesures : stations Météo-France · Mise à jour {time(forecast.fetchedAt / 1000)}
             </T>
           </>
         ) : null}
@@ -98,7 +113,7 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
         <T style={styles.compactCity} numberOfLines={1}>
           {place.name}
         </T>
-        {c ? <T style={styles.compactLine}>{`${temp(c.temperature)} · ${weatherLabel(c.weatherCode, c.isDay)}`}</T> : null}
+        {c ? <T style={styles.compactLine}>{`${temp(shownTemp ?? c.temperature)} · ${weatherLabel(c.weatherCode, c.isDay)}`}</T> : null}
       </Animated.View>
     </View>
   );
@@ -112,6 +127,7 @@ const styles = StyleSheet.create({
   cond: { fontSize: 20, fontWeight: '500', color: DIM },
   hilo: { fontSize: 20, fontWeight: '500', marginTop: 2 },
   retry: { marginTop: 30, padding: 16 },
+  measured: { fontSize: 12, color: DIM, marginTop: 6 },
   compact: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 10 },
   compactCity: { fontSize: 22, fontWeight: '600' },
   compactLine: { fontSize: 15, color: DIM, fontWeight: '500' },

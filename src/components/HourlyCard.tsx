@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { upcomingHours, type DayPoint, type HourPoint } from '../lib/forecast';
+import { upcomingHours, upcomingMinutely, type DayPoint, type HourPoint, type Minutely } from '../lib/forecast';
 import { hour, temp, time } from '../lib/format';
 import { symbolFor } from '../lib/sky';
 import { isRainy, weatherLabel, windDirection } from '../lib/weatherCodes';
@@ -34,8 +34,10 @@ const MODES: { id: Mode; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { id: 'wind', icon: { ios: 'wind', android: 'air' } },
 ];
 
-export function HourlyCard({ hourly, daily }: { hourly: HourPoint[]; daily: DayPoint[] }) {
+export function HourlyCard({ hourly, daily, minutely }: { hourly: HourPoint[]; daily: DayPoint[]; minutely: Minutely }) {
   const [mode, setMode] = useState<Mode>('temp');
+  const [quarter, setQuarter] = useState(false);
+  const quarters = upcomingMinutely(minutely).filter((q) => q.temperature !== null || q.windSpeed !== null);
   const hours = upcomingHours(hourly).slice(0, 25);
   if (!hours.length) return null;
   const start = hours[0].time;
@@ -67,6 +69,9 @@ export function HourlyCard({ hourly, daily }: { hourly: HourPoint[]; daily: DayP
         </View>
       </View>
       <View style={styles.sep} />
+      {quarter && quarters.length ? (
+        <QuarterStrip quarters={quarters} mode={mode} />
+      ) : (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
         {items.map((it) => {
           if (it.kind === 'sun') {
@@ -117,12 +122,72 @@ export function HourlyCard({ hourly, daily }: { hourly: HourPoint[]; daily: DayP
           );
         })}
       </ScrollView>
-      <T style={styles.unit}>{mode === 'rain' ? 'Pluie en mm/h · risque en %' : mode === 'wind' ? 'Vent et rafales en km/h' : ' '}</T>
+      )}
+      <View style={styles.bottom}>
+        <T style={styles.unit}>
+          {quarter
+            ? 'Toutes les 15 min · modèle AROME 1,3 km (Météo-France)'
+            : mode === 'rain'
+              ? 'Pluie en mm/h · risque en %'
+              : mode === 'wind'
+                ? 'Vent et rafales en km/h'
+                : ' '}
+        </T>
+        {quarters.length ? (
+          <Pressable onPress={() => setQuarter((q) => !q)} style={[styles.chip, quarter && styles.modeOn]} hitSlop={6}>
+            <T style={{ fontSize: 12, fontWeight: '700' }}>15 min</T>
+          </Pressable>
+        ) : null}
+      </View>
     </Glass>
   );
 }
 
+function QuarterStrip({ quarters, mode }: { quarters: Minutely; mode: Mode }) {
+  const maxRain = Math.max(0.25, ...quarters.map((q) => q.precipitation));
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+      {quarters.map((q, i) => (
+        <View key={q.time} style={styles.col}>
+          <T style={styles.hour}>{i === 0 ? 'Maint.' : time(q.time)}</T>
+          {mode === 'wind' ? (
+            <>
+              <View style={styles.iconBox}>
+                {q.windDirection !== null ? (
+                  <View style={{ transform: [{ rotate: `${q.windDirection + 180}deg` }] }}>
+                    <Icon name={{ ios: 'location.north.fill', android: 'navigation' }} size={18} />
+                  </View>
+                ) : null}
+                {q.windDirection !== null ? <T style={styles.small}>{windDirection(q.windDirection)}</T> : null}
+              </View>
+              <T style={styles.value}>{q.windSpeed !== null ? Math.round(q.windSpeed) : '–'}</T>
+              <T style={styles.small}>{q.windGusts !== null ? `raf. ${Math.round(q.windGusts)}` : ' '}</T>
+            </>
+          ) : mode === 'rain' ? (
+            <>
+              <View style={[styles.iconBox, { justifyContent: 'flex-end' }]}>
+                <View style={[styles.rainBar, { height: Math.max(2, (q.precipitation / maxRain) * 44), opacity: q.precipitation > 0 ? 1 : 0.25 }]} />
+              </View>
+              <T style={styles.value}>{q.precipitation >= 0.05 ? q.precipitation.toFixed(1) : '0'}</T>
+              <T style={styles.small}>mm</T>
+            </>
+          ) : (
+            <>
+              <View style={styles.iconBox}>
+                {q.precipitation >= 0.05 ? <Icon name={{ ios: 'cloud.rain.fill', android: 'rainy' }} size={24} multicolor /> : <T style={styles.small}> </T>}
+              </View>
+              <T style={styles.value}>{q.temperature !== null ? `${q.temperature.toFixed(1)}°` : '–'}</T>
+            </>
+          )}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
+  bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.18)' },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   summary: { fontSize: 15, lineHeight: 20 },
   modes: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 16, padding: 2 },
@@ -138,5 +203,5 @@ const styles = StyleSheet.create({
   smallBlue: { fontSize: 11, color: RAIN_BLUE, fontWeight: '600' },
   small: { fontSize: 11, color: DIM },
   sunLabel: { fontSize: 12, color: DIM, marginTop: 4 },
-  unit: { fontSize: 11, color: DIM, marginTop: 6 },
+  unit: { fontSize: 11, color: DIM, flex: 1 },
 });

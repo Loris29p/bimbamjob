@@ -20,7 +20,7 @@ Design dans l'esprit des applis météo iOS : fond plein écran qui suit le ciel
 - **Radar** (bouton carte en bas à gauche) : pluie des 2 dernières heures, animée ([RainViewer](https://www.rainviewer.com/api.html))
 - **Villes** (bouton liste en bas à droite) : recherche de communes ([Base Adresse Nationale](https://adresse.data.gouv.fr)), position GPS, appui long pour retirer une ville
 
-**Sources de prévisions** (via [Open-Meteo](https://open-meteo.com)) : modèles AROME et ARPEGE de Météo-France en priorité pour l'actuel, l'horaire et les 4 premiers jours ; meilleur modèle disponible (ECMWF…) pour la probabilité de pluie, l'UV, la visibilité et la tendance jusqu'à 14 jours.
+**Sources** : voir [docs/SOURCES.md](docs/SOURCES.md) pour le détail et les raisons de chaque choix. En résumé : mesures réelles des stations Météo-France (toutes les 6 min) pour « maintenant », modèle AROME 1,3 km au pas de 15 min pour les 6 prochaines heures, AROME et ARPEGE pour l'horaire et les 4 premiers jours ; meilleur modèle disponible (ECMWF…) pour la probabilité de pluie, l'UV, la visibilité et la tendance jusqu'à 14 jours.
 
 Une notification prévient quand de la pluie arrive dans l'heure à ta position (vérifiée à l'ouverture de l'app).
 
@@ -37,10 +37,10 @@ Une notification prévient quand de la pluie arrive dans l'heure à ta position 
 
 > Les notifications ne fonctionnent pas dans Expo Go sur Android. Il faut alors une version de développement (`npx eas-cli build --profile development`).
 
-## Activer les vigilances Météo-France
+## Activer les mesures des stations et les vigilances Météo-France
 
 1. Crée un compte gratuit sur https://portail-api.meteofrance.fr.
-2. Abonne-toi à l'API **« Données Publiques Vigilance »** et génère une clé (API Key).
+2. Abonne-toi aux API **« Données Publiques Observation »** et **« Données Publiques Vigilance »**, puis génère une clé (API Key).
 3. Copie `.env.example` en `.env` et colle ta clé :
    ```
    EXPO_PUBLIC_METEOFRANCE_API_KEY=ta_cle
