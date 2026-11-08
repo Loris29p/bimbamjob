@@ -11,7 +11,12 @@ Design dans l'esprit des applis météo iOS : fond plein écran qui suit le ciel
   - Pluie dans les 3 h au pas de 15 min (modèle AROME 1,3 km de Météo-France)
   - Heure par heure sur 24 h avec probabilité de pluie, lever et coucher du soleil
   - Prévisions sur 14 jours avec barres de température
-  - Tuiles : ressenti, précipitations, vent (boussole + rafales), humidité et point de rosée, UV, soleil, pression et tendance, visibilité
+  - Heure par heure avec 3 vues : température, pluie (mm + risque), vent (direction + rafales)
+  - Qualité de l'air (indice européen, Copernicus CAMS) et comparaison avec la veille
+  - Tuiles : vent (boussole + rafales), ressenti, précipitations, humidité et point de rosée, UV, soleil (courbe), pression et tendance, visibilité
+  - Phase de la lune (calculée sur le téléphone)
+  - **Détail au toucher** : chaque carte ouvre une page avec choix du jour, graphique sur 24 h et comparaison avec la veille
+  - En-tête qui se réduit quand on fait défiler, barre flottante en bas
 - **Radar** (bouton carte en bas à gauche) : pluie des 2 dernières heures, animée ([RainViewer](https://www.rainviewer.com/api.html))
 - **Villes** (bouton liste en bas à droite) : recherche de communes ([Base Adresse Nationale](https://adresse.data.gouv.fr)), position GPS, appui long pour retirer une ville
 

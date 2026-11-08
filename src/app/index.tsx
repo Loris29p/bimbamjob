@@ -9,7 +9,7 @@ import { WeatherPage } from '../components/WeatherPage';
 import { usePlaces } from '../lib/PlaceContext';
 import { placeKey, type Place } from '../lib/types';
 
-const BAR = 50;
+const BAR = 70;
 
 export default function Home() {
   const { width } = useWindowDimensions();
@@ -38,21 +38,24 @@ export default function Home() {
         renderItem={({ item }) => <WeatherPage place={item} bottomInset={bottom} />}
       />
 
-      <View style={[styles.bar, { height: bottom, paddingBottom: insets.bottom }]}>
-        {Platform.OS === 'ios' ? <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} /> : null}
-        <Pressable hitSlop={12} onPress={() => router.push('/radar')} accessibilityLabel="Radar de pluie">
+      {/* Barre flottante : radar · pages · villes */}
+      <View pointerEvents="box-none" style={[styles.bar, { bottom: insets.bottom + 6 }]}>
+        <Pressable onPress={() => router.push('/radar')} accessibilityLabel="Radar de pluie" style={styles.round}>
+          {Platform.OS === 'ios' ? <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} /> : null}
           <Icon name={{ ios: 'map', android: 'map' }} size={22} />
         </Pressable>
-        <View style={styles.dots}>
+        <View style={styles.pill}>
+          {Platform.OS === 'ios' ? <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} /> : null}
           {places.map((p, i) =>
             p.isGps ? (
-              <Icon key={placeKey(p)} name={{ ios: 'location.fill', android: 'near_me' }} size={10} color={i === activeIndex ? '#fff' : 'rgba(255,255,255,0.45)'} />
+              <Icon key={placeKey(p)} name={{ ios: 'location.fill', android: 'near_me' }} size={11} color={i === activeIndex ? '#fff' : 'rgba(255,255,255,0.45)'} />
             ) : (
               <View key={placeKey(p)} style={[styles.dot, { opacity: i === activeIndex ? 1 : 0.45 }]} />
             ),
           )}
         </View>
-        <Pressable hitSlop={12} onPress={() => router.push('/villes')} accessibilityLabel="Liste des villes">
+        <Pressable onPress={() => router.push('/villes')} accessibilityLabel="Liste des villes" style={styles.round}>
+          {Platform.OS === 'ios' ? <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} /> : null}
           <Icon name={{ ios: 'list.bullet', android: 'list' }} size={22} />
         </Pressable>
       </View>
@@ -60,21 +63,16 @@ export default function Home() {
   );
 }
 
+const glass = {
+  overflow: 'hidden' as const,
+  backgroundColor: Platform.OS === 'ios' ? 'rgba(20,30,50,0.25)' : 'rgba(20,30,50,0.8)',
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: 'rgba(255,255,255,0.3)',
+};
+
 const styles = StyleSheet.create({
-  bar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 22,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.25)',
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(10,20,35,0.25)' : 'rgba(10,20,35,0.85)',
-    overflow: 'hidden',
-  },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  bar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  round: { ...glass, width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  pill: { ...glass, height: 40, borderRadius: 20, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#fff' },
 });

@@ -11,6 +11,7 @@ export default function RootLayout() {
         <Stack.Screen name="villes" options={{ animation: 'fade' }} />
         <Stack.Screen name="radar" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="vigilance" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="detail" options={{ presentation: 'modal' }} />
       </Stack>
     </PlaceProvider>
   );
