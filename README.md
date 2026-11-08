@@ -4,14 +4,20 @@ Application mobile (iOS / Android) de météo et de pluie pour la France, basée
 
 ## Fonctionnalités
 
-| Écran | Contenu | Source |
-|---|---|---|
-| **Météo** | Pluie dans les 2 h (pas de 15 min), conditions actuelles, heure par heure sur 36 h (température, ressenti, pluie, probabilité, vent, rafales), tendance sur 14 jours | AROME 1,3 km + ARPEGE (Météo-France) via [Open-Meteo](https://open-meteo.com), ECMWF au-delà de 4 jours |
-| **Radar** | Carte animée des précipitations des 2 dernières heures | [RainViewer](https://www.rainviewer.com/api.html) |
-| **Vigilance** | Vigilances officielles du département (aujourd'hui / demain), par phénomène | API officielle Météo-France |
-| **Villes** | Recherche de communes, position GPS, favoris | [Base Adresse Nationale](https://adresse.data.gouv.fr) |
+Design dans l'esprit des applis météo iOS : fond plein écran qui suit le ciel, grosse température, cartes translucides, défilement entre les villes.
 
-Une notification te prévient quand de la pluie arrive dans l'heure. Pour l'instant, la vérification se fait à l'ouverture de l'app ou quand tu la rafraîchis.
+- **Écran principal** (une page par lieu, on glisse de l'une à l'autre)
+  - Vigilance Météo-France du département (si jaune ou plus)
+  - Pluie dans les 3 h au pas de 15 min (modèle AROME 1,3 km de Météo-France)
+  - Heure par heure sur 24 h avec probabilité de pluie, lever et coucher du soleil
+  - Prévisions sur 14 jours avec barres de température
+  - Tuiles : ressenti, précipitations, vent (boussole + rafales), humidité et point de rosée, UV, soleil, pression et tendance, visibilité
+- **Radar** (bouton carte en bas à gauche) : pluie des 2 dernières heures, animée ([RainViewer](https://www.rainviewer.com/api.html))
+- **Villes** (bouton liste en bas à droite) : recherche de communes ([Base Adresse Nationale](https://adresse.data.gouv.fr)), position GPS, appui long pour retirer une ville
+
+**Sources de prévisions** (via [Open-Meteo](https://open-meteo.com)) : modèles AROME et ARPEGE de Météo-France en priorité pour l'actuel, l'horaire et les 4 premiers jours ; meilleur modèle disponible (ECMWF…) pour la probabilité de pluie, l'UV, la visibilité et la tendance jusqu'à 14 jours.
+
+Une notification prévient quand de la pluie arrive dans l'heure à ta position (vérifiée à l'ouverture de l'app).
 
 ## Lancer l'app sur ton téléphone
 

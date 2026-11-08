@@ -5,8 +5,13 @@ import { PlaceProvider } from '../lib/PlaceContext';
 export default function RootLayout() {
   return (
     <PlaceProvider>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <StatusBar style="light" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0B1520' } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="villes" options={{ animation: 'fade' }} />
+        <Stack.Screen name="radar" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="vigilance" options={{ presentation: 'modal' }} />
+      </Stack>
     </PlaceProvider>
   );
 }
