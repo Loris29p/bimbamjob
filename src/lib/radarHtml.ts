@@ -34,7 +34,7 @@ export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top
   #modes button{border:0;background:none;color:${text};font-weight:600;padding:6px 12px;border-radius:14px;font-size:14px}
   #modes button.on{background:${dark ? 'rgba(255,255,255,.25)' : '#fff'}}
   #track{position:relative;height:28px;margin-top:10px}
-  #slider{width:100%;margin:0}
+  #slider{width:100%;margin:0;touch-action:none}
   #ticks{display:flex;justify-content:space-between;color:${sub};font-size:12px;margin-top:2px}
   #now{position:absolute;top:-2px;width:2px;height:14px;background:${text};border-radius:1px}
   #msg{position:absolute;top:${insets.top + 8}px;left:64px;right:76px;z-index:1000;text-align:center;font-size:13px;padding:6px 10px;display:none}
@@ -92,18 +92,23 @@ function render(values){ // values : N*N en mm/h
   ctx.putImageData(img,0,0);return any?c.toDataURL():null;
 }
 
-var frames={'3h':[],'12h':[]}, mode='3h', index=0, timer=null, overlay=null, tempMarkers=[], radarLayers={}, rvHost='';
+var frames={'3h':[],'12h':[]}, mode='3h', tempMarkers=[], radarLayers={}, rvHost='';
 var hourlyTemps=null, hourlyTimes=[];
 
 function tempsAt(t){ // températures de la grille à l'heure la plus proche
   if(!hourlyTemps)return null;var best=0;for(var k=0;k<hourlyTimes.length;k++){if(Math.abs(hourlyTimes[k]-t)<Math.abs(hourlyTimes[best]-t))best=k}
   return hourlyTemps.map(function(a){return a[best]});
 }
+var tempKey=-1;
 function showTemps(t){
-  var temps=tempsAt(t);tempMarkers.forEach(function(m){map.removeLayer(m)});tempMarkers=[];if(!temps)return;
+  if(!hourlyTemps)return;var best=0;for(var k=0;k<hourlyTimes.length;k++){if(Math.abs(hourlyTimes[k]-t)<Math.abs(hourlyTimes[best]-t))best=k}
+  if(best===tempKey)return;tempKey=best;var temps=hourlyTemps.map(function(a){return a[best]});
   var c=Math.floor(N/2);document.getElementById('meT').textContent=Math.round(temps[c*N+c])+'°';
-  for(var i=1;i<N;i+=3){for(var j=1;j<N;j+=3){if(Math.abs(i-c)<2&&Math.abs(j-c)<2)continue;var v=temps[i*N+j];if(v==null)continue;
-    tempMarkers.push(L.marker([+lats[i*N+j],+lons[i*N+j]],{icon:L.divIcon({className:'',html:'<div class="temp">'+Math.round(v)+'</div>',iconSize:[34,34]}),interactive:false}).addTo(map));}}
+  if(!tempMarkers.length){
+    for(var i=1;i<N;i+=3){for(var j=1;j<N;j+=3){if(Math.abs(i-c)<2&&Math.abs(j-c)<2)continue;
+      var m=L.marker([+lats[i*N+j],+lons[i*N+j]],{icon:L.divIcon({className:'',html:'<div class="temp"></div>',iconSize:[34,34]}),interactive:false}).addTo(map);m.idx=i*N+j;tempMarkers.push(m);}}
+  }
+  tempMarkers.forEach(function(m){var el=m.getElement();if(el&&el.firstChild)el.firstChild.textContent=temps[m.idx]==null?'':Math.round(temps[m.idx])});
 }
 // Les images RainViewer (palette « Universal Blue ») sont recolorées avec notre palette,
 // lissées (au-delà du zoom 7, le service ne fournit pas plus de détail) et le bruit très faible est retiré.
@@ -149,34 +154,53 @@ function radarLayer(f){
   if(!radarLayers[f.path])radarLayers[f.path]=new RadarLayer({path:f.path,opacity:0,maxZoom:12,zIndex:10,className:'radar'}).addTo(map);
   return radarLayers[f.path];
 }
-function show(i){
-  var list=frames[mode];if(!list.length)return;index=i;var f=list[i];
-  Object.keys(radarLayers).forEach(function(k){radarLayers[k].setOpacity(0)});
-  if(overlay){map.removeLayer(overlay);overlay=null}
-  if(f.kind==='radar'){radarLayer(f).setOpacity(.95);if(list[i+1]&&list[i+1].kind==='radar')radarLayer(list[i+1]);}
-  else if(f.img){overlay=L.imageOverlay(f.img,bounds,{opacity:.95,className:'rain',interactive:false}).addTo(map);}
-  showTemps(f.t);
-  document.getElementById('slider').value=i;
-  document.getElementById('title').textContent=f.kind==='radar'?'Radar (observé)':'Prévision AROME';
-  var d=new Date(f.t*1000),days=['Dim.','Lun.','Mar.','Mer.','Jeu.','Ven.','Sam.'];
-  document.getElementById('time').textContent=days[d.getDay()]+' '+hm(f.t)+(f.empty?' · pas de pluie':'');
+var STEPS=40, pos=0, shown=[], raf=null, lastTs=0;
+function layerOf(f){
+  if(f.kind==='radar')return radarLayer(f);
+  if(!f.img)return null;
+  if(!f.layer)f.layer=L.imageOverlay(f.img,bounds,{opacity:0,className:'rain',interactive:false}).addTo(map);
+  return f.layer;
+}
+function preload(list){list.forEach(function(f){layerOf(f)})} // toutes les images sont chargées d'avance
+function show(p){
+  var list=frames[mode];if(!list.length)return;
+  pos=Math.max(0,Math.min(list.length-1,p));var i=Math.floor(pos),k=pos-i;if(i>=list.length-1){i=list.length-1;k=0}
+  var a=list[i],b=list[i+1],want=[];
+  // fondu enchaîné : l'image courante s'efface pendant que la suivante apparaît
+  var la=layerOf(a);if(la)want.push([la,.95*Math.min(1,2*(1-k))]); // pas de « creux » de couleur au milieu du fondu
+  if(b&&k>0){var lb=layerOf(b);if(lb)want.push([lb,.95*Math.min(1,2*k)])}
+  shown.forEach(function(l){if(!want.some(function(w){return w[0]===l}))l.setOpacity(0)});
+  want.forEach(function(w){w[0].setOpacity(w[1])});shown=want.map(function(w){return w[0]});
+  var t=b?a.t+(b.t-a.t)*k:a.t,cur=k<0.5||!b?a:b;
+  showTemps(t);
+  document.getElementById('slider').value=Math.round(pos*STEPS);
+  document.getElementById('title').textContent=cur.kind==='radar'?'Radar (observé)':'Prévision AROME';
+  var d=new Date(t*1000),days=['Dim.','Lun.','Mar.','Mer.','Jeu.','Ven.','Sam.'];
+  document.getElementById('time').textContent=days[d.getDay()]+' '+hm(Math.round(t/60)*60)+(cur.empty?' · pas de pluie':'');
 }
 function setMode(m){
   mode=m;stop();document.querySelectorAll('#modes button').forEach(function(b){b.className=b.dataset.m===m?'on':''});
-  var list=frames[m],s=document.getElementById('slider');s.max=Math.max(0,list.length-1);
+  shown.forEach(function(l){l.setOpacity(0)});shown=[];
+  var list=frames[m],s=document.getElementById('slider');s.max=Math.max(0,(list.length-1)*STEPS);preload(list);
   var now=Date.now()/1000,ni=0;list.forEach(function(f,k){if(f.t<=now+60)ni=k});
-  // graduations
   var ticks=document.getElementById('ticks');ticks.innerHTML='';
   var n=5;for(var k=0;k<n;k++){var f=list[Math.round(k*(list.length-1)/(n-1))];if(!f)continue;var sp=document.createElement('span');sp.textContent=Math.abs(f.t-now)<450?'Maint.':(m==='12h'?hh(f.t):hm(f.t));ticks.appendChild(sp)}
-  var mark=document.getElementById('now');mark.style.left=(list.length>1?ni/(list.length-1)*100:0)+'%';
+  document.getElementById('now').style.left=(list.length>1?ni/(list.length-1)*100:0)+'%';
   show(ni);
 }
-function stop(){if(timer){clearInterval(timer);timer=null}document.getElementById('play').textContent='▶'}
+function stop(){if(raf){cancelAnimationFrame(raf);raf=null}document.getElementById('play').textContent='▶'}
+function tick(ts){
+  var n=frames[mode].length;if(n<2)return stop();
+  var dt=lastTs?Math.min(0.1,(ts-lastTs)/1000):0;lastTs=ts;
+  var speed=mode==='12h'?1.2:2.5; // images par seconde
+  var p=pos+dt*speed;if(p>n-1+0.6)p=0; // courte pause sur la dernière image, puis on recommence
+  show(Math.min(p,n-1));pos=p;raf=requestAnimationFrame(tick);
+}
 document.getElementById('play').onclick=function(){
-  if(timer)return stop();document.getElementById('play').textContent='❚❚';
-  timer=setInterval(function(){show((index+1)%frames[mode].length)},mode==='12h'?900:600);
+  if(raf)return stop();document.getElementById('play').textContent='❚❚';
+  if(pos>=frames[mode].length-1)pos=0;lastTs=0;raf=requestAnimationFrame(tick);
 };
-document.getElementById('slider').oninput=function(e){stop();show(+e.target.value)};
+document.getElementById('slider').oninput=function(e){stop();show(+e.target.value/STEPS)};
 document.querySelectorAll('#modes button').forEach(function(b){b.onclick=function(){setMode(b.dataset.m)}});
 function msg(t){var m=document.getElementById('msg');m.style.display=t?'block':'none';m.textContent=t||''}
 
