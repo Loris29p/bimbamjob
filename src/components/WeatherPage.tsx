@@ -66,7 +66,8 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
   const maskTop = scrollY.interpolate({ inputRange: [70, 140], outputRange: [1, 0], extrapolate: 'clamp' });
   const [mode, setMode] = useState<Mode>('temp');
   const contentRef = useRef<HostInstance>(null);
-  const pin = useMemo(() => ({ scrollY, top: compactHeight, content: contentRef }), [scrollY, compactHeight]);
+  const [layoutVersion, setLayoutVersion] = useState(0);
+  const pin = useMemo(() => ({ scrollY, top: compactHeight, content: contentRef, version: layoutVersion }), [scrollY, compactHeight, layoutVersion]);
 
   return (
     <View style={{ width, height }}>
@@ -94,7 +95,7 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
       >
         <PinContext.Provider value={pin}>
         {/* la marge du haut est DANS la vue mesurée, pour que la position des cartes soit exacte */}
-        <View ref={contentRef} collapsable={false} style={{ paddingTop: insets.top + 24 }}>
+        <View ref={contentRef} collapsable={false} style={{ paddingTop: insets.top + 24 }} onLayout={() => setLayoutVersion((v) => v + 1)}>
         <Animated.View style={[styles.header, { opacity: bigOpacity, transform: [{ translateY: headerShift }] }]}>
           {place.isGps && place.name !== 'Ma position' ? <T style={styles.myPos}>MA POSITION</T> : null}
           <T style={styles.city} numberOfLines={1}>

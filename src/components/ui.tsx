@@ -2,11 +2,12 @@
 import { BlurView, type BlurTint } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { createContext, useContext, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Animated, Platform, StyleSheet, Text, View, type HostInstance, type StyleProp, type TextProps, type ViewStyle } from 'react-native';
 
 /** Fourni par la page : défilement en cours, bord du haut (sous l'en-tête replié), contenu défilant. */
-export type PinInfo = { scrollY: Animated.Value; top: number; content: RefObject<HostInstance | null> };
+/** `version` change chaque fois que le contenu change de taille : les cartes se re-mesurent alors. */
+export type PinInfo = { scrollY: Animated.Value; top: number; content: RefObject<HostInstance | null>; version: number };
 export const PinContext = createContext<PinInfo | null>(null);
 
 const LIQUID = Platform.OS === 'ios' && isLiquidGlassAvailable();
@@ -64,6 +65,13 @@ export function Glass({ title, icon, children, style }: { title?: string; icon?:
       () => {},
     );
   };
+
+  // Re-mesure quand une carte au-dessus change de taille (données arrivées après coup) :
+  // onLayout ne se déclenche pas dans ce cas car la position relative au parent ne change pas.
+  useEffect(() => {
+    measure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin?.version]);
 
   // Quand la carte atteint le bord du haut, son titre reste collé pendant que la carte se replie dessous.
   const HEADER = 44;
