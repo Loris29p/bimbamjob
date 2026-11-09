@@ -16,8 +16,8 @@ export default function Apercu() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0B1520' }}>
-      <WeatherPage place={place} bottomInset={insets.bottom} />
-      <View style={[styles.bar, { top: insets.top + 6 }]}>
+      <WeatherPage place={place} bottomInset={insets.bottom} inSheet />
+      <View style={[styles.bar, { top: 12 }]}>
         <Pressable hitSlop={10} onPress={() => router.back()}>
           <T style={styles.btn}>Annuler</T>
         </Pressable>

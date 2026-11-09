@@ -32,6 +32,8 @@ export default function Detail() {
   const m = METRICS[metric];
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  // Présentée en feuille iOS : la feuille commence déjà sous la barre d'état, pas de marge d'encoche en plus.
+  const top = Platform.OS === 'ios' ? 12 : insets.top + 16;
   const { places, activeIndex } = usePlaces();
   const { forecast } = useForecast(places[activeIndex] ?? null);
   const [dayIdx, setDayIdx] = useState(0);
@@ -50,9 +52,9 @@ export default function Detail() {
 
   if (!forecast || !day || main.length < 2) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.screen, { paddingTop: top }]}>
         <Header title={m.title} icon={m.icon} onTitle={() => setMenu((v) => !v)} />
-        {menu ? <FloatingMenu top={insets.top + 64} current={metric} onClose={() => setMenu(false)} onPick={(id) => { setMetric(id); setMenu(false); }} /> : null}
+        {menu ? <FloatingMenu top={top + 48} current={metric} onClose={() => setMenu(false)} onPick={(id) => { setMetric(id); setMenu(false); }} /> : null}
         <T style={{ color: DIM, marginTop: 20 }}>Données indisponibles pour cet indicateur.</T>
       </View>
     );
@@ -178,7 +180,7 @@ export default function Detail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
-    <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 30 }}>
+    <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: top, paddingBottom: insets.bottom + 30 }}>
       <Header title={m.title} icon={m.icon} onTitle={() => setMenu((v) => !v)} />
 
       <View style={styles.days}>
@@ -348,7 +350,7 @@ export default function Detail() {
       </View>
     </ScrollView>
       {menu ? (
-        <FloatingMenu top={insets.top + 64} current={metric} onClose={() => setMenu(false)} onPick={(id) => { tick(); setMetric(id); setSecond(false); setMenu(false); }} />
+        <FloatingMenu top={top + 48} current={metric} onClose={() => setMenu(false)} onPick={(id) => { tick(); setMetric(id); setSecond(false); setMenu(false); }} />
       ) : null}
     </View>
   );

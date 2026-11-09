@@ -34,9 +34,11 @@ import { VigilanceBanner } from './VigilanceBanner';
 const MaskedView: ComponentType<any> =
   Platform.OS === 'web' ? ({ children, style }: { children: ReactNode; style: object }) => <View style={style}>{children}</View> : (MaskedViewBase as unknown as ComponentType<any>);
 
-export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset: number }) {
+export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Place; bottomInset: number; inSheet?: boolean }) {
   const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const safe = useSafeAreaInsets();
+  // Dans une feuille iOS (aperçu d'une ville), pas de marge d'encoche : la feuille est déjà dessous.
+  const insets = inSheet ? { ...safe, top: 44 } : safe;
   const { forecast, loading, error, refresh } = useForecast(place);
 
   useEffect(() => {
