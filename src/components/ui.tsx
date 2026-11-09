@@ -11,6 +11,7 @@ export type PinInfo = { scrollY: Animated.Value; top: number; content: RefObject
 export const PinContext = createContext<PinInfo | null>(null);
 
 const LIQUID = Platform.OS === 'ios' && isLiquidGlassAvailable();
+const CARD_RADIUS = 22;
 
 /**
  * Matériau de fond fourni par iOS : « Liquid Glass » sur iOS 26 et plus,
@@ -20,9 +21,28 @@ const LIQUID = Platform.OS === 'ios' && isLiquidGlassAvailable();
 // et les textes blancs / gris deviennent illisibles.
 export const GLASS_TINT = 'rgba(28,38,56,0.42)';
 
-export function Material({ style, tint = 'systemUltraThinMaterialDark', glass = 'regular', interactive, glassTint = GLASS_TINT }: { style?: StyleProp<ViewStyle>; tint?: BlurTint; glass?: 'regular' | 'clear'; interactive?: boolean; glassTint?: string }) {
-  if (LIQUID) return <GlassView style={[StyleSheet.absoluteFill, style]} glassEffectStyle={glass} isInteractive={interactive} tintColor={glassTint} colorScheme="dark" />;
-  if (Platform.OS === 'ios') return <BlurView intensity={60} tint={tint} style={[StyleSheet.absoluteFill, style]} />;
+// `radius` doit être donné au verre lui-même : s'il est seulement découpé par un parent arrondi,
+// iOS le dessine rectangulaire et le reflet lumineux du bord (signature du Liquid Glass) est coupé.
+// `glassTint={null}` : verre d'origine, sans teinte (boutons flottants, comme dans Météo).
+export function Material({
+  style,
+  tint = 'systemUltraThinMaterialDark',
+  glass = 'regular',
+  interactive,
+  glassTint = GLASS_TINT,
+  radius,
+}: {
+  style?: StyleProp<ViewStyle>;
+  tint?: BlurTint;
+  glass?: 'regular' | 'clear';
+  interactive?: boolean;
+  glassTint?: string | null;
+  radius?: number;
+}) {
+  const shape = radius !== undefined ? { borderRadius: radius } : null;
+  if (LIQUID)
+    return <GlassView style={[StyleSheet.absoluteFill, shape, style]} glassEffectStyle={glass} isInteractive={interactive} tintColor={glassTint ?? undefined} colorScheme="dark" />;
+  if (Platform.OS === 'ios') return <BlurView intensity={60} tint={tint} style={[StyleSheet.absoluteFill, shape, style]} />;
   return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,20,40,0.35)' }, style]} />;
 }
 export const liquidGlass = LIQUID;
@@ -86,13 +106,13 @@ export function Glass({ title, icon, children, style }: { title?: string; icon?:
 
   return (
     <View ref={ref} onLayout={measure} style={[styles.card, style]}>
-      <Material />
+      <Material radius={CARD_RADIUS} />
       {title ? (
         <Animated.View style={[styles.headerWrap, shift ? { transform: [{ translateY: shift }] } : null]}>
           {plate ? (
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: plate }]}>
               {/* même matériau que la carte : le titre collé ne forme pas de bandeau sombre */}
-              <Material />
+              <Material radius={CARD_RADIUS} />
             </Animated.View>
           ) : null}
           <View style={styles.header}>
@@ -108,9 +128,10 @@ export function Glass({ title, icon, children, style }: { title?: string; icon?:
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
+    borderRadius: CARD_RADIUS,
     padding: 16,
     marginBottom: 10,
+    // le verre a désormais la même forme arrondie que la carte : la découpe ne coupe plus son bord lumineux
     overflow: 'hidden',
     // le verre iOS 26 dessine déjà son propre bord lumineux
     backgroundColor: LIQUID ? 'transparent' : Platform.OS === 'ios' ? 'rgba(255,255,255,0.04)' : 'transparent',

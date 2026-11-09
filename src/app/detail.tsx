@@ -435,7 +435,7 @@ function FloatingMenu({ top, current, onPick, onClose }: { top: number; current:
   return (
     <Pressable style={[StyleSheet.absoluteFill, { zIndex: 10 }]} onPress={onClose}>
       <View style={[styles.floating, { top }]}>
-        <Material tint="systemThickMaterialDark" />
+        <Material tint="systemThickMaterialDark" radius={16} />
         <MetricMenu current={current} onPick={onPick} />
       </View>
     </Pressable>
