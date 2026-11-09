@@ -24,6 +24,10 @@ export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top
   #legend .bar{width:6px;border-radius:3px;background:linear-gradient(#FFF27A,#C77DFF,#4E7CF5,#9CC8FF)}
   #legend .labels{display:flex;flex-direction:column;justify-content:space-between;height:96px;color:${sub}}
   #side{position:absolute;right:12px;bottom:${insets.bottom + 150}px;z-index:1000;display:flex;flex-direction:column}
+  #layers{position:absolute;right:68px;bottom:${insets.bottom + 150}px;z-index:1001;display:none;flex-direction:column;padding:6px;min-width:180px}
+  #layers button{border:0;background:none;color:${text};text-align:left;font-size:15px;padding:10px 12px;border-radius:12px}
+  #layers button.on{background:rgba(127,127,127,.25);font-weight:700}
+  .temp small{font-size:9px;margin-left:1px;opacity:.8}
   #side button{width:46px;height:46px;border:0;background:none;font-size:20px;color:${text}}
   #panel{position:absolute;left:12px;right:12px;bottom:${insets.bottom + 10}px;z-index:1000;padding:12px 14px}
   #top{display:flex;align-items:center;gap:10px}
@@ -49,7 +53,8 @@ export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top
 <div id="map"></div>
 <div id="msg" class="glass"></div>
 <div id="legend" class="glass"><b>Précipitations</b><div class="row"><div class="bar"></div><div class="labels"><span>Très fortes</span><span>Fortes</span><span>Modérées</span><span>Faibles</span></div></div></div>
-<div id="side" class="glass"><button id="locate" aria-label="Ma position">➤</button></div>
+<div id="side" class="glass"><button id="layersBtn" aria-label="Calques">◧</button><button id="locate" aria-label="Ma position">➤</button></div>
+<div id="layers" class="glass"><button data-l="rain" class="on">Précipitations</button><button data-l="temp">Température</button><button data-l="wind">Vent</button><button data-l="air">Qualité de l’air</button></div>
 <div id="panel" class="glass">
   <div id="top"><button id="play">▶</button><div><div id="title">Chargement…</div><div id="time"></div></div>
     <div id="modes"><button data-m="3h" class="on">3 h</button><button data-m="12h">12 h</button></div></div>
@@ -103,22 +108,62 @@ function renderForecast(A,B,k){ // A, B : N*N valeurs en mm/h
 }
 
 var frames={'3h':[],'12h':[]}, mode='3h', tempMarkers=[], rvHost='';
-var hourlyTemps=null, hourlyTimes=[];
+var hourlyTemps=null, hourlyTimes=[], hourlyWind=null, hourlyDir=null, hourlyAir=null, layer='rain';
 
 function tempsAt(t){ // températures de la grille à l'heure la plus proche
   if(!hourlyTemps)return null;var best=0;for(var k=0;k<hourlyTimes.length;k++){if(Math.abs(hourlyTimes[k]-t)<Math.abs(hourlyTimes[best]-t))best=k}
   return hourlyTemps.map(function(a){return a[best]});
 }
-var tempKey=-1;
+var tempKey='';
+function nearestHour(t){var best=0;for(var k=0;k<hourlyTimes.length;k++){if(Math.abs(hourlyTimes[k]-t)<Math.abs(hourlyTimes[best]-t))best=k}return best}
 function showTemps(t){
-  if(!hourlyTemps)return;var best=0;for(var k=0;k<hourlyTimes.length;k++){if(Math.abs(hourlyTimes[k]-t)<Math.abs(hourlyTimes[best]-t))best=k}
-  if(best===tempKey)return;tempKey=best;var temps=hourlyTemps.map(function(a){return a[best]});
-  var c=Math.floor(N/2);document.getElementById('meT').textContent=Math.round(temps[c*N+c])+'°';
+  if(!hourlyTemps)return;var best=nearestHour(t),key=layer+best;if(key===tempKey)return;tempKey=key;
+  var temps=hourlyTemps.map(function(a){return a[best]}),c=Math.floor(N/2);
+  document.getElementById('meT').textContent=Math.round(temps[c*N+c])+'°';
   if(!tempMarkers.length){
     for(var i=1;i<N;i+=3){for(var j=1;j<N;j+=3){if(Math.abs(i-c)<2&&Math.abs(j-c)<2)continue;
       var m=L.marker([+lats[i*N+j],+lons[i*N+j]],{icon:L.divIcon({className:'',html:'<div class="temp"></div>',iconSize:[34,34]}),interactive:false}).addTo(map);m.idx=i*N+j;tempMarkers.push(m);}}
   }
-  tempMarkers.forEach(function(m){var el=m.getElement();if(el&&el.firstChild)el.firstChild.textContent=temps[m.idx]==null?'':Math.round(temps[m.idx])});
+  tempMarkers.forEach(function(m){var el=m.getElement();if(!el||!el.firstChild)return;var d=el.firstChild,k=m.idx;
+    if(layer==='wind'&&hourlyWind){var v=hourlyWind[k][best],dir=hourlyDir[k][best];
+      d.innerHTML='<span style="display:inline-block;transform:rotate('+(dir+180)+'deg)">↑</span>'+(v==null?'':Math.round(v));}
+    else if(layer==='air'&&hourlyAir){var a=hourlyAir[k]?hourlyAir[k][nearestIn(hourlyAir.times,hourlyTimes[best])]:null;d.textContent=a==null?'':Math.round(a);}
+    else d.textContent=temps[k]==null?'':Math.round(temps[k]);
+  });
+}
+function nearestIn(times,t){var best=0;for(var k=0;k<times.length;k++){if(Math.abs(times[k]-t)<Math.abs(times[best]-t))best=k}return best}
+
+// Palettes des autres calques (r, g, b, a de 0 à 1)
+function lerpStops(stops,v){if(v<=stops[0][0])return stops[0][1];for(var k=1;k<stops.length;k++){if(v<=stops[k][0]){var a=stops[k-1],b=stops[k],f=(v-a[0])/(b[0]-a[0]);return a[1].map(function(x,i){return x+(b[1][i]-x)*f})}}return stops[stops.length-1][1]}
+var PALETTES={
+  temp:[[-10,[94,92,230,.55]],[0,[90,170,250,.55]],[8,[110,210,190,.5]],[15,[150,215,110,.5]],[22,[250,210,70,.55]],[30,[250,130,60,.6]],[38,[230,50,50,.65]]],
+  wind:[[0,[120,180,250,.15]],[10,[110,200,220,.35]],[20,[120,210,150,.45]],[35,[230,210,80,.55]],[55,[245,140,60,.6]],[80,[225,60,60,.65]],[110,[170,50,160,.7]]],
+  air:[[0,[80,240,230,.45]],[20,[80,204,170,.45]],[40,[240,230,65,.5]],[60,[255,80,80,.55]],[80,[150,0,50,.6]],[100,[125,33,129,.65]]]
+};
+var LEGENDS={
+  rain:['Précipitations',['Très fortes','Fortes','Modérées','Faibles'],'linear-gradient(#FFF27A,#C77DFF,#4E7CF5,#9CC8FF)'],
+  temp:['Température',['35°','20°','5°','-10°'],'linear-gradient(rgb(230,50,50),rgb(250,210,70),rgb(110,210,190),rgb(94,92,230))'],
+  wind:['Vent (km/h)',['80+','50','25','0'],'linear-gradient(rgb(225,60,60),rgb(230,210,80),rgb(120,210,150),rgb(120,180,250))'],
+  air:['Qualité de l’air',['Mauvaise','Dégradée','Moyenne','Bonne'],'linear-gradient(rgb(150,0,50),rgb(255,80,80),rgb(240,230,65),rgb(80,240,230))']
+};
+function setLegend(l){var g=LEGENDS[l],el=document.getElementById('legend');el.querySelector('b').textContent=g[0];el.querySelector('.bar').style.background=g[2];
+  el.querySelector('.labels').innerHTML=g[1].map(function(x){return'<span>'+x+'</span>'}).join('')}
+var fieldCanvas=document.createElement('canvas');fieldCanvas.width=fieldCanvas.height=FS;
+function renderField(A,B,k,stops){
+  var ctx=fieldCanvas.getContext('2d'),img=ctx.createImageData(FS,FS),d=img.data;
+  for(var y=0;y<FS;y++){var gy=y/(FS-1)*(N-1),i0=Math.floor(gy),i1=Math.min(N-1,i0+1),fy=gy-i0;
+    for(var x=0;x<FS;x++){var gx=x/(FS-1)*(N-1),j0=Math.floor(gx),j1=Math.min(N-1,j0+1),fx=gx-j0;
+      var w00=(1-fx)*(1-fy),w01=fx*(1-fy),w10=(1-fx)*fy,w11=fx*fy;
+      var v=A[i0*N+j0]*w00+A[i0*N+j1]*w01+A[i1*N+j0]*w10+A[i1*N+j1]*w11;
+      if(B&&k>0){v=v*(1-k)+(B[i0*N+j0]*w00+B[i0*N+j1]*w01+B[i1*N+j0]*w10+B[i1*N+j1]*w11)*k}
+      if(!isFinite(v))continue;var c=lerpStops(stops,v),o=(y*FS+x)*4;d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=Math.round(c[3]*255);}}
+  ctx.putImageData(img,0,0);return fieldCanvas.toDataURL();
+}
+function layerValues(i){ // valeurs de la grille pour l'image horaire i, selon le calque
+  if(layer==='temp')return hourlyTemps.map(function(a){return a[i]==null?NaN:a[i]});
+  if(layer==='wind')return hourlyWind.map(function(a){return a[i]==null?NaN:a[i]});
+  if(layer==='air'&&hourlyAir){var j=nearestIn(hourlyAir.times,hourlyTimes[i]);return hourlyAir.map(function(a){return a&&a[j]!=null?a[j]:NaN})}
+  return null;
 }
 // Les images RainViewer (palette « Universal Blue ») sont recolorées avec notre palette,
 // lissées (au-delà du zoom 7, le service ne fournit pas plus de détail) et le bruit très faible est retiré.
@@ -176,7 +221,13 @@ function show(p){
   var list=frames[mode];if(!list.length)return;
   pos=Math.max(0,Math.min(list.length-1,p));var i=Math.floor(pos),k=pos-i;if(i>=list.length-1){i=list.length-1;k=0}
   var a=list[i],b=list[i+1]&&k>0?list[i+1]:null;
-  var key=mode+i+'|'+Math.round(k*40);
+  var key=layer+mode+i+'|'+Math.round(k*40);
+  if(key!==lastKey&&layer!=='rain'){lastKey=key;
+    if(field)field.setOpacity(0);
+    var A=layerValues(i),B=b?layerValues(i+1):null;
+    if(A){var u=renderField(A,B,k,PALETTES[layer]);if(!fcLayer)fcLayer=L.imageOverlay(u,bounds,{className:'rain',interactive:false}).addTo(map);else fcLayer.setUrl(u);fcLayer.setOpacity(1)}
+    else if(fcLayer)fcLayer.setOpacity(0);
+  }
   if(key!==lastKey){lastKey=key;
     var radarOp=0,fcOp=0,fa=null,fb=null,fk=0;
     if(a.kind==='radar'){
@@ -190,9 +241,9 @@ function show(p){
   var t=b?a.t+(b.t-a.t)*k:a.t,cur=k<0.5||!b?a:b;
   showTemps(t);
   document.getElementById('slider').value=Math.round(pos*STEPS);
-  document.getElementById('title').textContent=cur.kind==='radar'?'Radar (observé)':'Prévision AROME';
+  document.getElementById('title').textContent=layer==='temp'?'Température':layer==='wind'?'Vent':layer==='air'?'Qualité de l’air (CAMS)':cur.kind==='radar'?'Radar (observé)':'Prévision AROME';
   var d=new Date(t*1000),days=['Dim.','Lun.','Mar.','Mer.','Jeu.','Ven.','Sam.'];
-  document.getElementById('time').textContent=days[d.getDay()]+' '+hm(Math.round(t/60)*60)+(cur.empty?' · pas de pluie':'');
+  document.getElementById('time').textContent=days[d.getDay()]+' '+hm(Math.round(t/60)*60)+(layer==='rain'&&cur.empty?' · pas de pluie':'');
 }
 function setMode(m){
   mode=m;stop();lastKey='';document.querySelectorAll('#modes button').forEach(function(b){b.className=b.dataset.m===m?'on':''});
@@ -217,14 +268,30 @@ document.getElementById('play').onclick=function(){
 };
 document.getElementById('slider').oninput=function(e){stop();show(+e.target.value/STEPS)};
 document.querySelectorAll('#modes button').forEach(function(b){b.onclick=function(){setMode(b.dataset.m)}});
+function setLayer(l){
+  layer=l;lastKey='';tempKey='';document.getElementById('layers').style.display='none';
+  document.querySelectorAll('#layers button').forEach(function(b){b.className=b.dataset.l===l?'on':''});
+  setLegend(l);document.getElementById('modes').style.display=l==='rain'?'flex':'none';
+  if(l==='air'&&!hourlyAir){loadAir().then(function(){if(layer==='air'){lastKey='';tempKey='';show(pos)}})}
+  setMode(l==='rain'?mode:'12h');
+}
+function loadAir(){
+  var u='https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+lats.join(',')+'&longitude='+lons.join(',')+'&timeformat=unixtime&hourly=european_aqi&forecast_days=2';
+  return fetch(u).then(function(r){return r.json()}).then(function(arr){if(!Array.isArray(arr))arr=[arr];
+    hourlyAir=arr.map(function(p){return p.hourly&&p.hourly.european_aqi});hourlyAir.times=arr[0].hourly.time;
+  }).catch(function(){msg('Qualité de l’air indisponible')});
+}
+document.getElementById('layersBtn').onclick=function(){var m=document.getElementById('layers');m.style.display=m.style.display==='flex'?'none':'flex'};
+document.querySelectorAll('#layers button').forEach(function(b){b.onclick=function(){setLayer(b.dataset.l)}});
 function msg(t){var m=document.getElementById('msg');m.style.display=t?'block':'none';m.textContent=t||''}
 
 var url='https://api.open-meteo.com/v1/forecast?latitude='+lats.join(',')+'&longitude='+lons.join(',')+
-  '&models=meteofrance_seamless&timeformat=unixtime&minutely_15=precipitation&forecast_minutely_15=12&hourly=precipitation,temperature_2m&forecast_hours=13';
+  '&models=meteofrance_seamless&timeformat=unixtime&minutely_15=precipitation&forecast_minutely_15=12&hourly=precipitation,temperature_2m,wind_speed_10m,wind_direction_10m&forecast_hours=13';
 var forecast=fetch(url).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(arr){
   if(!Array.isArray(arr))arr=[arr];
   var q=arr[0].minutely_15.time, h=arr[0].hourly.time;
   hourlyTimes=h;hourlyTemps=arr.map(function(p){return p.hourly.temperature_2m});
+  hourlyWind=arr.map(function(p){return p.hourly.wind_speed_10m||[]});hourlyDir=arr.map(function(p){return p.hourly.wind_direction_10m||[]});
   var quarter=q.map(function(t,k){var v=arr.map(function(p){return (p.minutely_15.precipitation[k]||0)*4});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
   var hourly=h.map(function(t,k){var v=arr.map(function(p){return p.hourly.precipitation[k]||0});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
   return{quarter:quarter,hourly:hourly};

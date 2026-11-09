@@ -1,12 +1,12 @@
 // Détail d'un indicateur : choix du jour, graphique sur 24 h, synthèse.
 import { router, useLocalSearchParams } from 'expo-router';
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chart, interp } from '../components/Chart';
 import { DIM, Icon, T } from '../components/ui';
-import { hoursOfDay, startOfDay, type DayPoint } from '../lib/forecast';
+import { hoursOfDay, startOfDay, type DayPoint, type HourPoint } from '../lib/forecast';
 import { hour, temp } from '../lib/format';
 import { METRICS, type MetricId } from '../lib/metrics';
 import { usePlaces } from '../lib/PlaceContext';
@@ -87,7 +87,7 @@ export default function Detail() {
   }
 
   // Comparaison avec la veille (aujourd'hui seulement)
-  let compare: string | null = null;
+  let compare: string | null = null; // eslint-disable-line prefer-const
   const y = forecast.yesterday;
   if (isToday && y) {
     if (metric === 'temp') {
@@ -102,6 +102,18 @@ export default function Detail() {
       compare = `Rafales max. hier : ${Math.round(y.windGustsMax)} km/h, aujourd’hui : ${Math.round(day.windGustsMax)} km/h.`;
     }
   }
+
+  // Intensité de pluie heure par heure (mm/h)
+  const intensity = hours.map((h) => ({ t: h.time, v: h.precipitation }));
+  const rainMax = Math.max(3, Math.ceil(Math.max(0, ...intensity.map((p) => p.v)) * 1.2));
+  const rainTicks = rainMax <= 4 ? [0, 1, 2, 3, 4].filter((v) => v <= rainMax) : rainMax <= 10 ? [0, 2, 4, 6, 8, 10].filter((v) => v <= rainMax) : [0, 5, 10, 15, 20, 25, 30].filter((v) => v <= rainMax);
+
+  // Même journée, la veille (pour les moyennes à comparer)
+  const yHours = hoursOfDay(forecast.hourly, dayStart - 86400);
+  const avg = (list: typeof hours, f: (h: (typeof hours)[number]) => number | null) => {
+    const v = list.map(f).filter((x): x is number => x !== null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  };
 
   // Cumuls de pluie autour de maintenant
   const sumRain = (from: number, to: number) => forecast.hourly.filter((h) => h.time >= from && h.time < to).reduce((acc, h) => acc + h.precipitation, 0);
@@ -124,6 +136,14 @@ export default function Detail() {
     else if (metric === 'uv') comparison = pair(day.uvMax, y.uvMax, (v) => `${Math.round(v)}`);
     else if (metric === 'wind') comparison = pair(day.windGustsMax, y.windGustsMax, (v) => `${Math.round(v)} km/h`);
     else if (metric === 'rain') comparison = pair(day.precipitationSum, y.precipitationSum, (v) => mmText(v));
+    else if (metric === 'humidity') comparison = pair(avg(hours, (h) => h.humidity), avg(yHours, (h) => h.humidity), (v) => `moy. ${Math.round(v)} %`);
+    else if (metric === 'visibility') comparison = pair(avg(hours, (h) => (h.visibility === null ? null : h.visibility / 1000)), avg(yHours, (h) => (h.visibility === null ? null : h.visibility / 1000)), (v) => `moy. ${Math.round(v)} km`);
+    else if (metric === 'pressure') comparison = pair(avg(hours, (h) => h.pressure), avg(yHours, (h) => h.pressure), (v) => `${Math.round(v)} hPa`);
+  }
+  if (!compare && comparison) {
+    const [a, b] = comparison;
+    const diff = a.ratio - b.ratio;
+    compare = Math.abs(diff) < 0.03 ? 'Assez semblable à hier.' : diff > 0 ? 'En hausse par rapport à hier.' : 'En baisse par rapport à hier.';
   }
 
   // Phrase de synthèse de la journée
@@ -141,13 +161,15 @@ export default function Detail() {
   } else if (metric === 'uv') {
     summary = hiP.v < 3 ? 'Indice faible toute la journée, pas de protection particulière.' : `Indice maximal de ${Math.round(hiP.v)} vers ${hour(hiP.t)} : protection conseillée en milieu de journée.`;
   } else if (metric === 'humidity') {
-    summary = `Humidité ${span}.`;
+    const dew = hours.map((h) => h.dewPoint);
+    const dmax = Math.max(...dew);
+    summary = `Humidité ${span}. Point de rosée entre ${temp(Math.min(...dew))} et ${temp(dmax)}${dmax >= 16 ? ' : air lourd' : dmax <= 5 ? ' : air plutôt sec' : ''}.`;
   } else if (metric === 'pressure') {
     const first = main[0].v;
     const last = main[main.length - 1].v;
     summary = `Pression ${span}, ${Math.abs(last - first) < 2 ? 'assez stable' : last > first ? 'en hausse' : 'en baisse'} sur la journée.`;
   } else if (metric === 'visibility') {
-    summary = loP.v < 1 ? `Brouillard possible vers ${hour(loP.t)} (visibilité sous 1 km).` : `Visibilité ${span}.`;
+    summary = loP.v < 1 ? `Brouillard possible vers ${hour(loP.t)} (visibilité sous 1 km).` : `Visibilité ${span}. Au plus bas, elle sera ${visWord(loP.v)} vers ${hour(loP.t)}.`;
   }
 
   const d = new Date(day.time * 1000);
@@ -183,20 +205,52 @@ export default function Detail() {
         <Icon name={symbolFor(day.weatherCode)} size={40} multicolor />
       </View>
 
-      <Chart
-        width={chartW}
-        dayStart={dayStart}
-        series={metric === 'rain' ? [] : [{ values: main, color: m.color }, ...(alt.length ? [{ values: alt, color: 'rgba(255,255,255,0.7)', dashed: true, fill: false }] : [])]}
-        bars={metric === 'rain' ? main : undefined}
-        barColor={m.color}
-        yMin={ticks[0]}
-        yMax={ticks[ticks.length - 1]}
-        yTicks={ticks}
-        formatY={(v) => (metric === 'temp' ? `${Math.round(v)}°` : metric === 'pressure' ? `${Math.round(v)}` : `${Math.round(v)}`)}
-        now={isToday ? nowSec : undefined}
-        formatValue={(v) => (metric === 'rain' ? `${Math.round(v)} %` : fmt(v))}
-        bands={metric === 'uv' ? [{ from: 0.2, to: 3, label: 'Faible' }, { from: 3, to: 6, label: 'Modéré' }, { from: 6, to: 8, label: 'Élevé' }, { from: 8, to: 11, label: 'Très élevé' }] : undefined}
-      />
+      <TopRow hours={hours} metric={metric} width={chartW} dayStart={dayStart} />
+      {metric === 'rain' ? (
+        <>
+          <Chart
+            width={chartW}
+            dayStart={dayStart}
+            series={[]}
+            bars={intensity}
+            barColor="#5AC8FA"
+            yMin={0}
+            yMax={rainMax}
+            yTicks={rainTicks}
+            formatY={(v) => (v === 0 ? '0' : `${v}`)}
+            now={isToday ? nowSec : undefined}
+            formatValue={(v) => `${v.toFixed(1)} mm/h · ${rainWord(v)}`}
+            bands={[{ from: 0.3, to: 2.5, label: 'Légère' }, { from: 2.5, to: 7.6, label: 'Modérée' }, { from: 7.6, to: 50, label: 'Forte' }].filter((b) => b.from < rainMax)}
+          />
+          <T style={styles.subTitle}>Risque de pluie</T>
+          <Chart
+            width={chartW}
+            height={170}
+            dayStart={dayStart}
+            series={[{ values: main, color: m.color }]}
+            yMin={0}
+            yMax={100}
+            yTicks={[0, 25, 50, 75, 100]}
+            formatY={(v) => `${v} %`}
+            now={isToday ? nowSec : undefined}
+            formatValue={(v) => `${Math.round(v)} %`}
+          />
+        </>
+      ) : (
+        <Chart
+          width={chartW}
+          dayStart={dayStart}
+          series={[{ values: main, color: m.color }, ...(alt.length ? [{ values: alt, color: 'rgba(255,255,255,0.7)', dashed: true, fill: false }] : [])]}
+          barColor={m.color}
+          yMin={ticks[0]}
+          yMax={ticks[ticks.length - 1]}
+          yTicks={ticks}
+          formatY={(v) => (metric === 'temp' ? `${Math.round(v)}°` : `${Math.round(v)}`)}
+          now={isToday ? nowSec : undefined}
+          formatValue={(v) => fmt(v)}
+          bands={metric === 'uv' ? [{ from: 0.2, to: 3, label: 'Faible' }, { from: 3, to: 6, label: 'Modéré' }, { from: 6, to: 8, label: 'Élevé' }, { from: 8, to: 11, label: 'Très élevé' }] : undefined}
+        />
+      )}
 
       {metric === 'wind' ? <T style={styles.legend}>Trait plein : vent moyen · pointillés : rafales</T> : null}
 
@@ -311,6 +365,57 @@ function Header({ title, icon, onTitle }: { title: string; icon: (typeof METRICS
   );
 }
 
+/** Rangée de repères toutes les 2 h au-dessus du graphique. */
+function TopRow({ hours, metric, width, dayStart }: { hours: HourPoint[]; metric: MetricId; width: number; dayStart: number }) {
+  const slots = Array.from({ length: 12 }, (_, i) => hours.find((h) => h.time >= dayStart + i * 7200) ?? null);
+  const w = (width - 34) / 12;
+  const nowSec = Date.now() / 1000;
+  return (
+    <View style={{ flexDirection: 'row', width: width - 34, marginBottom: 4 }}>
+      {slots.map((h, i) => {
+        if (!h) return <View key={i} style={{ width: w }} />;
+        const past = h.time + 7200 < nowSec;
+        let content: ReactNode = null;
+        if (metric === 'temp') content = <Icon name={symbolFor(h.weatherCode, h.isDay)} size={17} multicolor />;
+        else if (metric === 'wind')
+          content = (
+            <View style={{ transform: [{ rotate: `${h.windDirection + 180}deg` }] }}>
+              <Icon name={{ ios: 'arrow.up', android: 'arrow_upward' }} size={13} />
+            </View>
+          );
+        else if (metric === 'pressure') {
+          const next = hours.find((x) => x.time >= h.time + 7200);
+          const d = next ? next.pressure - h.pressure : 0;
+          content = <T style={styles.topTxt}>{Math.abs(d) < 0.5 ? '=' : d > 0 ? '↑' : '↓'}</T>;
+        } else if (metric === 'rain') content = <T style={styles.topTxt}>{h.precipitationProbability !== null ? `${h.precipitationProbability}` : ''}</T>;
+        else if (metric === 'humidity') content = <T style={styles.topTxt}>{Math.round(h.humidity)}</T>;
+        else if (metric === 'uv') content = <T style={styles.topTxt}>{h.uv !== null ? Math.round(h.uv) : ''}</T>;
+        else if (metric === 'visibility') content = <T style={styles.topTxt}>{h.visibility !== null ? Math.round(h.visibility / 1000) : ''}</T>;
+        return (
+          <View key={i} style={{ width: w, alignItems: 'center', opacity: past ? 0.5 : 1 }}>
+            {content}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function rainWord(mmh: number) {
+  if (mmh < 0.1) return 'sec';
+  if (mmh < 2.5) return 'pluie légère';
+  if (mmh < 7.6) return 'pluie modérée';
+  return 'forte pluie';
+}
+
+function visWord(km: number) {
+  if (km < 1) return 'très réduite (brouillard)';
+  if (km < 4) return 'réduite (brume)';
+  if (km < 10) return 'moyenne';
+  if (km < 20) return 'bonne';
+  return 'excellente';
+}
+
 const ORDER: MetricId[] = ['temp', 'rain', 'wind', 'uv', 'humidity', 'pressure', 'visibility'];
 
 function MetricMenu({ current, onPick }: { current: MetricId; onPick: (id: MetricId) => void }) {
@@ -361,6 +466,8 @@ const styles = StyleSheet.create({
   menu: { backgroundColor: '#222B38', borderRadius: 14, marginBottom: 14, overflow: 'hidden' },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   menuSep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)', marginLeft: 43 },
+  topTxt: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
+  subTitle: { fontSize: 17, fontWeight: '700', marginTop: 18, marginBottom: 6 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
   kvBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.15)' },
   kvVal: { fontSize: 16, fontWeight: '700', color: '#5AC8FA' },
