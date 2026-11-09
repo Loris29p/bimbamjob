@@ -1,5 +1,6 @@
 // Briques visuelles communes : carte translucide, icônes, textes blancs.
-import { BlurView } from 'expo-blur';
+import { BlurView, type BlurTint } from 'expo-blur';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { createContext, useContext, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Animated, Platform, StyleSheet, Text, View, type HostInstance, type StyleProp, type TextProps, type ViewStyle } from 'react-native';
@@ -7,6 +8,19 @@ import { Animated, Platform, StyleSheet, Text, View, type HostInstance, type Sty
 /** Fourni par la page : défilement en cours, bord du haut (sous l'en-tête replié), contenu défilant. */
 export type PinInfo = { scrollY: Animated.Value; top: number; content: RefObject<HostInstance | null> };
 export const PinContext = createContext<PinInfo | null>(null);
+
+const LIQUID = Platform.OS === 'ios' && isLiquidGlassAvailable();
+
+/**
+ * Matériau de fond fourni par iOS : « Liquid Glass » sur iOS 26 et plus,
+ * flou système classique sinon (et simple voile sur Android/web).
+ */
+export function Material({ style, tint = 'systemUltraThinMaterialDark', glass = 'regular', interactive }: { style?: StyleProp<ViewStyle>; tint?: BlurTint; glass?: 'regular' | 'clear'; interactive?: boolean }) {
+  if (LIQUID) return <GlassView style={[StyleSheet.absoluteFill, style]} glassEffectStyle={glass} isInteractive={interactive} />;
+  if (Platform.OS === 'ios') return <BlurView intensity={60} tint={tint} style={[StyleSheet.absoluteFill, style]} />;
+  return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,20,40,0.35)' }, style]} />;
+}
+export const liquidGlass = LIQUID;
 
 export const WHITE = '#FFFFFF';
 export const DIM = 'rgba(235,235,245,0.6)'; // secondaryLabel iOS
@@ -60,14 +74,13 @@ export function Glass({ title, icon, children, style }: { title?: string; icon?:
 
   return (
     <View ref={ref} onLayout={measure} style={[styles.card, style]}>
-      {Platform.OS === 'ios' ? <BlurView intensity={60} tint="systemUltraThinMaterialDark" style={StyleSheet.absoluteFill} /> : null}
+      <Material />
       {title ? (
         <Animated.View style={[styles.headerWrap, shift ? { transform: [{ translateY: shift }] } : null]}>
           {plate ? (
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: plate }]}>
               {/* même matériau que la carte : le titre collé ne forme pas de bandeau sombre */}
-              {Platform.OS === 'ios' ? <BlurView intensity={60} tint="systemUltraThinMaterialDark" style={StyleSheet.absoluteFill} /> : null}
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.04)' : 'rgba(10,20,40,0.3)' }]} />
+              <Material />
             </Animated.View>
           ) : null}
           <View style={styles.header}>
@@ -87,8 +100,9 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 10,
     overflow: 'hidden',
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.04)' : 'rgba(10,20,40,0.3)',
-    borderWidth: StyleSheet.hairlineWidth,
+    // le verre iOS 26 dessine déjà son propre bord lumineux
+    backgroundColor: LIQUID ? 'transparent' : Platform.OS === 'ios' ? 'rgba(255,255,255,0.04)' : 'transparent',
+    borderWidth: LIQUID ? 0 : StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.14)',
   },
   headerWrap: { marginHorizontal: -16, marginTop: -16, paddingHorizontal: 16, paddingTop: 16, marginBottom: 10, zIndex: 2, overflow: 'hidden' },

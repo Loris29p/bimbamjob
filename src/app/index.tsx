@@ -1,10 +1,9 @@
 // Écran principal : une page par lieu, on passe de l'une à l'autre en glissant.
-import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { FlatList, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '../components/ui';
+import { Icon, liquidGlass, Material } from '../components/ui';
 import { WeatherPage } from '../components/WeatherPage';
 import { tick } from '../lib/hig';
 import { usePlaces } from '../lib/PlaceContext';
@@ -46,11 +45,11 @@ export default function Home() {
       {/* Barre flottante : radar · pages · villes */}
       <View pointerEvents="box-none" style={[styles.bar, { bottom: insets.bottom + 6 }]}>
         <Pressable onPress={() => router.push('/radar')} accessibilityLabel="Radar de pluie" style={styles.round}>
-          {Platform.OS === 'ios' ? <BlurView intensity={70} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} /> : null}
+          <Material tint="systemChromeMaterialDark" interactive />
           <Icon name={{ ios: 'map', android: 'map' }} size={22} />
         </Pressable>
         <View style={styles.pill}>
-          {Platform.OS === 'ios' ? <BlurView intensity={70} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} /> : null}
+          <Material tint="systemChromeMaterialDark" interactive />
           {places.map((p, i) =>
             p.isGps ? (
               <Icon key={placeKey(p)} name={{ ios: 'location.fill', android: 'near_me' }} size={11} color={i === activeIndex ? '#fff' : 'rgba(255,255,255,0.45)'} />
@@ -60,7 +59,7 @@ export default function Home() {
           )}
         </View>
         <Pressable onPress={() => router.push('/villes')} accessibilityLabel="Liste des villes" style={styles.round}>
-          {Platform.OS === 'ios' ? <BlurView intensity={70} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} /> : null}
+          <Material tint="systemChromeMaterialDark" interactive />
           <Icon name={{ ios: 'list.bullet', android: 'list' }} size={22} />
         </Pressable>
       </View>
@@ -70,8 +69,8 @@ export default function Home() {
 
 const glass = {
   overflow: 'hidden' as const,
-  backgroundColor: Platform.OS === 'ios' ? 'rgba(20,30,50,0.25)' : 'rgba(20,30,50,0.8)',
-  borderWidth: StyleSheet.hairlineWidth,
+  backgroundColor: liquidGlass ? 'transparent' : Platform.OS === 'ios' ? 'rgba(20,30,50,0.25)' : 'rgba(20,30,50,0.8)',
+  borderWidth: liquidGlass ? 0 : StyleSheet.hairlineWidth,
   borderColor: 'rgba(255,255,255,0.3)',
 };
 

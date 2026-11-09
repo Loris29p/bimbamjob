@@ -1,12 +1,11 @@
 // Détail d'un indicateur : choix du jour, graphique sur 24 h, synthèse.
-import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Fragment, type ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chart, interp } from '../components/Chart';
-import { DIM, Icon, T } from '../components/ui';
+import { DIM, Icon, liquidGlass, Material, T } from '../components/ui';
 import { hoursOfDay, startOfDay, type DayPoint, type HourPoint } from '../lib/forecast';
 import { hour, temp } from '../lib/format';
 import { tick } from '../lib/hig';
@@ -429,7 +428,7 @@ function FloatingMenu({ top, current, onPick, onClose }: { top: number; current:
   return (
     <Pressable style={[StyleSheet.absoluteFill, { zIndex: 10 }]} onPress={onClose}>
       <View style={[styles.floating, { top }]}>
-        {Platform.OS === 'ios' ? <BlurView intensity={80} tint="systemThickMaterialDark" style={StyleSheet.absoluteFill} /> : null}
+        <Material tint="systemThickMaterialDark" />
         <MetricMenu current={current} onPick={onPick} />
       </View>
     </Pressable>
@@ -482,7 +481,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700' },
   titleBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)' },
   menu: { overflow: 'hidden' },
-  floating: { position: 'absolute', alignSelf: 'center', width: 260, borderRadius: 16, overflow: 'hidden', backgroundColor: Platform.OS === 'ios' ? 'rgba(60,60,67,0.35)' : '#2C2C2E', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
+  floating: { position: 'absolute', alignSelf: 'center', width: 260, borderRadius: 16, overflow: 'hidden', backgroundColor: liquidGlass ? 'transparent' : Platform.OS === 'ios' ? 'rgba(60,60,67,0.35)' : '#2C2C2E', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
   menuSep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)', marginLeft: 43 },
   topTxt: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
