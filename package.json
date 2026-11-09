@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -36,7 +38,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "ios:xcode": "expo prebuild --platform ios --clean && xed ios"
+    "ios:xcode": "expo prebuild --platform ios --clean && xed ios",
+    "lint": "expo lint"
   },
   "private": true
 }
