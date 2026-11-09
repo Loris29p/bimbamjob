@@ -32,13 +32,16 @@ const MODES: { m: '3h' | '12h'; label: string }[] = [
   { m: '12h', label: '12 h' },
 ];
 const LABEL_W = 58;
+const BUBBLE_W = 64;
 const TRACK_H = 10;
 const NEAR = 450; // à moins de 7 min 30 de l'heure actuelle, on parle de « maintenant »
 
 const JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const pad = (n: number) => (n < 10 ? '0' : '') + n;
 const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const timeOf = (t: number) => hm(new Date(Math.round(t / 60) * 60000));
 
 function heading(layer: MapLayer, pos: TimelinePos | null) {
   if (!pos) return { title: 'Chargement…', sub: '' };
@@ -46,10 +49,10 @@ function heading(layer: MapLayer, pos: TimelinePos | null) {
   const now = Date.now() / 1000;
   const d = new Date(pos.t * 1000);
   const title = layer === 'rain' ? (pos.t < now - NEAR ? 'Précipitations passées' : 'Prévisions') : LAYER_NAMES[layer];
-  const date = `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}`;
-  // L'heure n'est ajoutée que lorsqu'on s'éloigne de « maintenant »
-  const time = Math.abs(pos.t - now) > NEAR ? ` · ${hm(new Date(Math.round(pos.t / 60) * 60000))}` : '';
-  return { title, sub: date + time };
+  // Près de « maintenant » : la date complète. Sinon l'heure EN PREMIER (avec une date courte),
+  // pour qu'elle ne soit jamais coupée par le sélecteur 3 h / 12 h.
+  if (Math.abs(pos.t - now) <= NEAR) return { title, sub: `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}` };
+  return { title, sub: `${timeOf(pos.t)} · ${JOURS[d.getDay()].toLowerCase()} ${d.getDate()} ${MOIS_COURT[d.getMonth()]}` };
 }
 
 export function RadarTimeline({ dark, layer, meta, pos, bottom, onPlay, onMode, onSeek }: Props) {
@@ -146,6 +149,12 @@ export function RadarTimeline({ dark, layer, meta, pos, bottom, onPlay, onMode, 
         </View>
 
         {/* Piste : partie écoulée pleine, graduations horaires sur la partie restante */}
+        {/* Pendant le glissement du doigt : l'heure exacte suit le doigt, au-dessus de la piste */}
+        {drag != null && pos && w ? (
+          <View pointerEvents="none" style={[styles.bubble, { left: 18 + Math.max(0, Math.min(w - BUBBLE_W, drag * w - BUBBLE_W / 2)), backgroundColor: c.text }]}>
+            <Text style={[styles.bubbleText, { color: dark ? '#000' : '#FFF' }]}>{timeOf(pos.t)}</Text>
+          </View>
+        ) : null}
         <View
           style={styles.hit}
           onLayout={(e) => setW(e.nativeEvent.layout.width)}
@@ -197,5 +206,7 @@ const styles = StyleSheet.create({
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: TRACK_H / 2 },
   grad: { position: 'absolute', top: 2, width: 2, height: TRACK_H - 4, marginLeft: -1, borderRadius: 1, opacity: 0.7 },
   ticks: { height: 20 },
+  bubble: { position: 'absolute', top: -34, width: BUBBLE_W, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  bubbleText: { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   tick: { position: 'absolute', width: LABEL_W, fontSize: 13, textAlign: 'center', fontVariant: ['tabular-nums'] },
 });
