@@ -10,6 +10,23 @@ export function radarHtml(lat: number, lon: number, dark: boolean, here: string,
   const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
   const base = `${esri}${dark ? 'World_Dark_Gray_Base' : 'World_Light_Gray_Base'}/MapServer/tile/{z}/{y}/{x}`;
   const labels = `${esri}${dark ? 'World_Dark_Gray_Reference' : 'World_Light_Gray_Reference'}/MapServer/tile/{z}/{y}/{x}`;
+  // Le fond Esri est gris (mer plus foncée que la terre) : un filtre SVG le recolore façon app Météo
+  // d'Apple (mer bleutée, terre claire). Niveaux de gris mesurés sur les tuiles : mer / terre.
+  const tint = dark
+    ? { seaL: 35, landL: 63, sea: [14, 24, 38], land: [50, 54, 60] }
+    : { seaL: 208, landL: 239, sea: [200, 222, 242], land: [246, 245, 241] };
+  const table = (c: 0 | 1 | 2) => {
+    const out: string[] = [];
+    for (let i = 0; i < 256; i += 5) {
+      const s = tint.sea[c], l = tint.land[c];
+      let v: number;
+      if (i <= tint.seaL) v = (s * i) / tint.seaL; // traits plus foncés que la mer
+      else if (i <= tint.landL) v = s + ((l - s) * (i - tint.seaL)) / (tint.landL - tint.seaL);
+      else v = l + ((255 - l) * (i - tint.landL)) / (255 - tint.landL);
+      out.push((v / 255).toFixed(3));
+    }
+    return out.join(' '); // 52 valeurs : entrées 0, 5, …, 255 (pas régulier, comme le veut feFuncX)
+  };
   const text = dark ? '#EAF1F8' : '#13212F';
   const halo = dark ? '0 0 3px #0B1520,0 0 3px #0B1520' : '0 0 3px #fff,0 0 3px #fff,0 0 2px #fff';
   return `<!doctype html><html><head>
@@ -31,12 +48,18 @@ export function radarHtml(lat: number, lon: number, dark: boolean, here: string,
   .rain{filter:blur(7px)}
   .radar{filter:blur(1.5px)}
   .leaflet-control-attribution{font-size:9px;background:transparent!important}
+  .base{filter:url(#tint);-webkit-filter:url(#tint)}
 </style></head><body>
+<svg width="0" height="0" style="position:absolute"><filter id="tint" color-interpolation-filters="sRGB"><feComponentTransfer>
+  <feFuncR type="table" tableValues="${table(0)}"/><feFuncG type="table" tableValues="${table(1)}"/><feFuncB type="table" tableValues="${table(2)}"/>
+</feComponentTransfer></filter></svg>
 <div id="map"></div>
 <script>
 var LAT=${lat}, LON=${lon};
-var map=L.map('map',{zoomControl:false,attributionControl:true}).setView([LAT,LON],9);
-L.tileLayer('${base}',{maxZoom:12,maxNativeZoom:16,attribution:'Fond © Esri · Radar RainViewer · Prévision AROME Météo-France'}).addTo(map);
+// Comme l'app Météo d'Apple : on ouvre sur une vue large (≈ 11° de longitude, toute la France sur iPhone).
+var HOMEZ=Math.max(4,Math.min(9,Math.log(360*window.innerWidth/(256*11))/Math.LN2));
+var map=L.map('map',{zoomControl:false,attributionControl:true,zoomSnap:0.25}).setView([LAT,LON],HOMEZ);
+L.tileLayer('${base}',{className:'base',maxZoom:12,maxNativeZoom:16,attribution:'Fond © Esri · Radar RainViewer · Prévision AROME Météo-France'}).addTo(map);
 map.createPane('labels');map.getPane('labels').style.zIndex=450;map.getPane('labels').style.pointerEvents='none';
 L.tileLayer('${labels}',{pane:'labels',maxZoom:12,maxNativeZoom:16}).addTo(map);
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){return'&#'+c.charCodeAt(0)+';'})}
@@ -290,7 +313,7 @@ function togglePlay(){
 // commandes envoyées par l'app (frise native)
 window.rn={play:togglePlay,mode:function(m){if(frames[m]&&frames[m].length)setMode(m)},
   seek:function(f){stop();var list=frames[mode],n=list.length;if(!n)return;show(posAt(list[0].t+f*(list[n-1].t-list[0].t)));postPos(true)},
-  layer:function(l){setLayer(l)},locate:function(){map.flyTo([LAT,LON],9,{duration:.6})},
+  layer:function(l){setLayer(l)},locate:function(){map.flyTo([LAT,LON],HOMEZ,{duration:.6})},
   go:function(la,lo){map.flyTo([la,lo],9,{duration:.6})}};
 function setLayer(l){
   layer=l;lastKey='';tempKey='';
@@ -305,10 +328,17 @@ function loadAir(){
 }
 function msg(t){post({type:'msg',text:t||''})}
 
+// Open-Meteo (gratuit) compte chaque point de la grille comme une demande et bloque au-delà
+// de 600 par minute : on garde donc la dernière réponse 10 min (même zone) pour ne pas tout
+// redemander à chaque ouverture de la carte, et on réessaie plus tard en cas d'échec.
+var FC_TTL=600;
+function cacheGet(key){try{var c=JSON.parse(localStorage.getItem('fc')||'null');if(c&&c.key===key&&Date.now()/1000-c.at<FC_TTL)return c.data}catch(e){}return null}
+function cachePut(key,data){try{localStorage.setItem('fc',JSON.stringify({key:key,at:Date.now()/1000,data:data}))}catch(e){}}
 function loadForecast(){
   var url='https://api.open-meteo.com/v1/forecast?latitude='+lats.join(',')+'&longitude='+lons.join(',')+
     '&models=meteofrance_seamless&timeformat=unixtime&minutely_15=precipitation&forecast_minutely_15=12&hourly=precipitation,temperature_2m,wind_speed_10m,wind_direction_10m&past_hours=3&forecast_hours=13';
-  return fetch(url).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(arr){
+  var cached=cacheGet(url);
+  return (cached?Promise.resolve(cached):fetch(url).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(d){cachePut(url,d);return d})).then(function(arr){
     if(!Array.isArray(arr))arr=[arr];
     var q=arr[0].minutely_15.time, h=arr[0].hourly.time;
     hourlyTimes=h;hourlyTemps=arr.map(function(p){return p.hourly.temperature_2m});
@@ -349,9 +379,24 @@ Promise.all([forecast,radar]).then(function(res){
   var fc=res[0],past=res[1];pastFrames=past;
   applyForecast(fc);
   if(!frames['3h'].length&&!frames['12h'].length){msg('Carte indisponible pour le moment');post({type:'pos',f:0,t:0,empty:false,playing:false,unavailable:true});return}
-  if(!fc)msg('Prévision indisponible : radar seulement');else if(!past.length)msg('Radar indisponible : prévision seulement');
+  if(!fc){msg('Prévision en cours de chargement…');retryForecast(0)}else if(!past.length)msg('Radar indisponible : prévision seulement');
   if(past.length){field=new RadarField({opacity:0,maxZoom:12,zIndex:10,className:'radar',updateWhenZooming:false}).addTo(map);map.on('moveend',preloadRadar);setTimeout(preloadRadar,50)}
   setMode(frames['3h'].length?'3h':'12h');
 });
+// Si la prévision a échoué (souvent : trop de demandes en une minute), on réessaie après
+// 20 s, 40 s, 70 s puis 2 min ; dès qu'elle arrive, la frise s'allonge vers le futur.
+var RETRY=[20,40,70,120];
+function retryForecast(n){
+  if(n>=RETRY.length){msg('Prévision indisponible : radar seulement');return}
+  setTimeout(function(){
+    if(frames['12h'].length){msg('');return} // déjà arrivée entre-temps (carte déplacée)
+    if(reloading)return retryForecast(n+1);
+    reloading=true;
+    loadForecast().then(function(fc){reloading=false;
+      if(!fc)return retryForecast(n+1);
+      msg('');applyForecast(fc);lastKey='';setMode(frames['3h'].length?mode:'12h');
+    });
+  },RETRY[n]*1000);
+}
 </script></body></html>`;
 }
