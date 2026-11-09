@@ -1,9 +1,21 @@
+// Qualité de l'air, présentée comme dans l'app Météo : niveau en gros, échelle colorée, comparaison avec hier.
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
-import { AQI_LEVELS, aqiLevel, fetchAirQuality } from '../lib/airQuality';
+import { aqiLevel, fetchAirQuality } from '../lib/airQuality';
 import { placeKey, type Place } from '../lib/types';
 import { useCached } from '../lib/useAsync';
-import { DIM, Glass, T } from './ui';
+import { Glass, T } from './ui';
+
+// « La qualité de l'air est… » : libellés accordés au féminin
+const NAMES: Record<string, string> = {
+  Bon: 'Bonne',
+  Moyen: 'Moyenne',
+  Dégradé: 'Dégradée',
+  Mauvais: 'Mauvaise',
+  'Très mauvais': 'Très mauvaise',
+  'Extrêmement mauvais': 'Extrêmement mauvaise',
+};
+const SCALE = ['#3D8BFF', '#34C759', '#A8D93A', '#FFD60A', '#FF9F0A', '#FF453A', '#B0123A', '#AF52DE'] as const;
 
 export function AirCard({ place }: { place: Place }) {
   const air = useCached(`air:${placeKey(place)}`, () => fetchAirQuality(place));
@@ -14,48 +26,30 @@ export function AirCard({ place }: { place: Place }) {
   let trend = '';
   if (air.yesterdayAqi !== null) {
     const d = air.aqi - air.yesterdayAqi;
-    trend = Math.abs(d) < 5 ? 'Comparable à hier à la même heure.' : d > 0 ? 'Moins bonne qu’hier à la même heure.' : 'Meilleure qu’hier à la même heure.';
+    trend =
+      Math.abs(d) < 5
+        ? 'La qualité de l’air est comparable à hier à peu près à la même heure.'
+        : d > 0
+          ? 'La qualité de l’air est moins bonne qu’hier à peu près à la même heure.'
+          : 'La qualité de l’air est meilleure qu’hier à peu près à la même heure.';
   }
-  const pollutants = [
-    { label: 'PM2,5', v: air.pm25 },
-    { label: 'PM10', v: air.pm10 },
-    { label: 'NO₂', v: air.no2 },
-    { label: 'O₃', v: air.o3 },
-  ].filter((p) => Number.isFinite(p.v));
 
   return (
     <Glass title="Qualité de l’air" icon={{ ios: 'aqi.medium', android: 'airwave' }}>
-      <View style={styles.row}>
-        <T style={styles.value}>{Math.round(air.aqi)}</T>
-        <T style={styles.label}>{level.label}</T>
-      </View>
+      <T style={styles.label}>{NAMES[level.label] ?? level.label}</T>
       <View style={styles.track}>
-        <LinearGradient colors={AQI_LEVELS.map((l) => l.color) as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-        <View style={[styles.dot, { left: `${ratio * 97}%` }]} />
+        <LinearGradient colors={SCALE as unknown as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.bar} />
+        <View style={[styles.dot, { left: `${ratio * 98}%` }]} />
       </View>
       {trend ? <T style={styles.text}>{trend}</T> : null}
-      <View style={styles.pollutants}>
-        {pollutants.map((p) => (
-          <View key={p.label} style={{ alignItems: 'center' }}>
-            <T style={styles.pv}>{Math.round(p.v)}</T>
-            <T style={styles.pl}>{p.label}</T>
-          </View>
-        ))}
-      </View>
-      <T style={styles.src}>Indice européen (µg/m³) · Copernicus CAMS</T>
     </Glass>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  value: { fontSize: 30, fontWeight: '600' },
-  label: { fontSize: 20, fontWeight: '600' },
-  track: { height: 6, borderRadius: 3, overflow: 'visible', marginVertical: 12 },
-  dot: { position: 'absolute', top: -3, width: 12, height: 12, borderRadius: 6, backgroundColor: '#fff', borderWidth: 2, borderColor: 'rgba(0,0,0,0.35)' },
-  text: { fontSize: 15 },
-  pollutants: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12 },
-  pv: { fontSize: 17, fontWeight: '600' },
-  pl: { fontSize: 11, color: DIM },
-  src: { fontSize: 11, color: DIM, marginTop: 10 },
+  label: { fontSize: 28, fontWeight: '700', letterSpacing: 0.3 },
+  track: { height: 10, justifyContent: 'center', marginTop: 12, marginBottom: 12 },
+  bar: { height: 5, borderRadius: 2.5 },
+  dot: { position: 'absolute', width: 10, height: 10, borderRadius: 5, marginLeft: -5, backgroundColor: '#fff', borderWidth: 2, borderColor: 'rgba(30,40,60,0.9)' },
+  text: { fontSize: 17, lineHeight: 22 },
 });

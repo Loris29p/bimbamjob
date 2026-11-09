@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   heading: { flex: 1, justifyContent: 'center' },
   capsRow: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  caps: { flex: 1, fontSize: 13, fontWeight: '600', color: DIM },
+  caps: { flex: 1, fontSize: 14, fontWeight: '600', color: DIM },
   title: { fontSize: 17, fontWeight: '600', letterSpacing: -0.4 },
   subtitle: { fontSize: 14, color: DIM, marginTop: 1 },
   modes: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.16)', borderRadius: 20, padding: 3 },

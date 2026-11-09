@@ -96,7 +96,7 @@ export function Glass({ title, icon, children, style }: { title?: string; icon?:
             </Animated.View>
           ) : null}
           <View style={styles.header}>
-            {icon ? <Icon name={icon} size={13} color={DIM} /> : null}
+            {icon ? <Icon name={icon} size={14} color={DIM} /> : null}
             <T style={styles.title}>{title.toUpperCase()}</T>
           </View>
         </Animated.View>
@@ -117,7 +117,8 @@ const styles = StyleSheet.create({
     borderWidth: LIQUID ? 0 : StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.14)',
   },
-  headerWrap: { marginHorizontal: -16, marginTop: -16, paddingHorizontal: 16, paddingTop: 16, marginBottom: 10, zIndex: 2, overflow: 'hidden' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.2)' },
-  title: { color: DIM, fontSize: 13, fontWeight: '600', letterSpacing: -0.08 },
+  headerWrap: { marginHorizontal: -16, marginTop: -16, paddingHorizontal: 16, paddingTop: 16, marginBottom: 8, zIndex: 2, overflow: 'hidden' },
+  // titre en petites capitales, sans trait dessous (comme l'app Météo)
+  header: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 8 },
+  title: { color: DIM, fontSize: 14, fontWeight: '600', letterSpacing: 0 },
 });

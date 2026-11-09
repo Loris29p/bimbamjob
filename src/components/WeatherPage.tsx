@@ -17,6 +17,8 @@ import { useCached } from '../lib/useAsync';
 import { useForecast } from '../lib/useForecast';
 import { weatherLabel } from '../lib/weatherCodes';
 import { AirCard } from './AirCard';
+import { PageFooter, WindCard } from './DetailCards';
+import { RadarPreview } from './RadarPreview';
 import { DailyCard } from './DailyCard';
 import { HourlyCard, type Mode } from './HourlyCard';
 import { MoonCard } from './MoonCard';
@@ -59,6 +61,13 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
   // On affiche la température mesurée si la station est proche et la mesure récente.
   const useObs = !!obs && obs.temperature !== null && obs.distanceKm <= 15 && Date.now() / 1000 - obs.time < 45 * 60;
   const shownTemp = useObs ? obs!.temperature! : c?.temperature;
+  // Vent : la mesure de la station remplace la prévision quand elle existe.
+  const windMeasured = obs?.windSpeed != null && obs.windDirection != null;
+  const wind = {
+    speed: windMeasured ? obs!.windSpeed! : (c?.windSpeed ?? 0),
+    direction: windMeasured ? obs!.windDirection! : (c?.windDirection ?? 0),
+    gusts: windMeasured && obs!.windGusts != null ? obs!.windGusts : (c?.windGusts ?? 0),
+  };
   const scrollY = useRef(new Animated.Value(0)).current;
   const bigOpacity = scrollY.interpolate({ inputRange: [0, 110], outputRange: [1, 0], extrapolate: 'clamp' });
   const compactOpacity = scrollY.interpolate({ inputRange: [90, 140], outputRange: [0, 1], extrapolate: 'clamp' });
@@ -137,13 +146,17 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
             <Pressable onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
               <DailyCard daily={forecast.daily} hourly={forecast.hourly} currentTemp={forecast.current.temperature} mode={mode} />
             </Pressable>
-            {obs ? <ObservationCard obs={obs} /> : null}
+            {/* même ordre que l'app Météo ; nos cartes en plus (pluie dans les 3 h, mesures) restent */}
+            <RadarPreview place={place} temperature={shownTemp ?? c!.temperature} />
             <AirCard place={place} />
+            <WindCard speed={wind.speed} gusts={wind.gusts} direction={wind.direction} />
+            <MoonCard place={place} />
             <Tiles forecast={forecast} obs={useObs ? obs : null} place={place} />
-            <MoonCard />
-            <T style={styles.source}>
-              Prévisions : AROME et ARPEGE (Météo-France) · Mesures : stations Météo-France · Mise à jour {time(forecast.fetchedAt / 1000)}
-            </T>
+            {obs ? <ObservationCard obs={obs} /> : null}
+            <PageFooter
+              place={place}
+              sources={`Prévisions : AROME et ARPEGE (Météo-France) · Mesures : stations Météo-France · Mise à jour ${time(forecast.fetchedAt / 1000)}`}
+            />
           </>
         ) : null}
         </View>
@@ -189,5 +202,4 @@ const styles = StyleSheet.create({
   measured: { fontSize: 12, color: DIM, marginTop: 6 },
   compact: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 10 },
   compactLine: { height: LINE_H, fontSize: 20, lineHeight: LINE_H, color: '#fff', fontWeight: '500', fontVariant: ['tabular-nums'] },
-  source: { fontSize: 12, color: DIM, textAlign: 'center', marginTop: 8 },
 });
