@@ -3,9 +3,10 @@
 //  - Futur : prévision du modèle AROME de Météo-France (via Open-Meteo), calculée sur une grille
 //    de points autour de toi puis dessinée en couleurs : au quart d'heure sur 3 h, à l'heure sur 12 h.
 export function radarHtml(lat: number, lon: number, dark: boolean) {
-  const base = dark
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  // Fonds de carte Esri (sans clé) : le fond, puis les noms de villes par-dessus la pluie.
+  const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+  const base = `${esri}${dark ? 'World_Dark_Gray_Base' : 'World_Light_Gray_Base'}/MapServer/tile/{z}/{y}/{x}`;
+  const labels = `${esri}${dark ? 'World_Dark_Gray_Reference' : 'World_Light_Gray_Reference'}/MapServer/tile/{z}/{y}/{x}`;
   const panel = dark ? 'rgba(20,28,40,.86)' : 'rgba(255,255,255,.9)';
   const text = dark ? '#EAF1F8' : '#13212F';
   const sub = dark ? 'rgba(234,241,248,.6)' : 'rgba(19,33,47,.6)';
@@ -17,12 +18,12 @@ export function radarHtml(lat: number, lon: number, dark: boolean) {
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body,#map{margin:0;height:100%;background:${dark ? '#0B1520' : '#EEF3F8'};font:15px -apple-system,Roboto,sans-serif;color:${text}}
   .glass{background:${panel};backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
-  #legend{position:absolute;left:12px;top:calc(env(safe-area-inset-top) + 64px);z-index:1000;padding:10px 12px;font-size:13px}
+  #legend{position:absolute;left:12px;top:calc(env(safe-area-inset-top) + 66px);z-index:1000;padding:10px 12px;font-size:13px}
   #legend b{display:block;margin-bottom:6px;font-size:14px}
   #legend .row{display:flex;gap:8px;align-items:stretch}
   #legend .bar{width:6px;border-radius:3px;background:linear-gradient(#FFF27A,#C77DFF,#4E7CF5,#9CC8FF)}
   #legend .labels{display:flex;flex-direction:column;justify-content:space-between;height:96px;color:${sub}}
-  #side{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 64px);z-index:1000;display:flex;flex-direction:column}
+  #side{position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom) + 150px);z-index:1000;display:flex;flex-direction:column}
   #side button{width:46px;height:46px;border:0;background:none;font-size:20px;color:${text}}
   #panel{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:1000;padding:12px 14px}
   #top{display:flex;align-items:center;gap:10px}
@@ -36,7 +37,7 @@ export function radarHtml(lat: number, lon: number, dark: boolean) {
   #slider{width:100%;margin:0}
   #ticks{display:flex;justify-content:space-between;color:${sub};font-size:12px;margin-top:2px}
   #now{position:absolute;top:-2px;width:2px;height:14px;background:${text};border-radius:1px}
-  #msg{position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:70px;right:70px;z-index:1000;text-align:center;font-size:13px;padding:6px 10px;display:none}
+  #msg{position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:64px;right:76px;z-index:1000;text-align:center;font-size:13px;padding:6px 10px;display:none}
   .temp{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:17px;background:rgba(70,80,95,.85);color:#fff;font-weight:700;font-size:14px;border:1.5px solid rgba(255,255,255,.7)}
   .me{display:flex;flex-direction:column;align-items:center}
   .me .bubble{width:58px;height:58px;border-radius:29px;background:rgba(150,160,175,.95);border:3px solid #fff;color:#fff;font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.25)}
@@ -57,7 +58,9 @@ export function radarHtml(lat: number, lon: number, dark: boolean) {
 <script>
 var LAT=${lat}, LON=${lon};
 var map=L.map('map',{zoomControl:false,attributionControl:true}).setView([LAT,LON],9);
-L.tileLayer('${base}',{maxZoom:12,subdomains:'abcd',attribution:'© OpenStreetMap © CARTO · Radar RainViewer · Prévision AROME Météo-France'}).addTo(map);
+L.tileLayer('${base}',{maxZoom:12,maxNativeZoom:16,attribution:'Fond © Esri · Radar RainViewer · Prévision AROME Météo-France'}).addTo(map);
+map.createPane('labels');map.getPane('labels').style.zIndex=450;map.getPane('labels').style.pointerEvents='none';
+L.tileLayer('${labels}',{pane:'labels',maxZoom:12,maxNativeZoom:16}).addTo(map);
 var me=L.marker([LAT,LON],{icon:L.divIcon({className:'',html:'<div class="me"><div class="bubble" id="meT">–</div><div class="dot"></div></div>',iconSize:[60,80],iconAnchor:[30,78]}),interactive:false,zIndexOffset:1000}).addTo(map);
 document.getElementById('locate').onclick=function(){map.setView([LAT,LON],9);};
 

@@ -25,5 +25,5 @@ export default function Radar() {
 }
 
 const styles = StyleSheet.create({
-  close: { position: 'absolute', right: 14, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  close: { position: 'absolute', left: 14, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(20,28,40,0.86)', alignItems: 'center', justifyContent: 'center' },
 });
