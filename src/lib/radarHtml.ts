@@ -40,6 +40,9 @@ export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top
   #track{position:relative;height:28px;margin-top:10px}
   #slider{width:100%;margin:0;touch-action:none}
   #ticks{display:flex;justify-content:space-between;color:${sub};font-size:12px;margin-top:2px}
+  #grads{position:absolute;left:8px;right:8px;top:9px;height:10px;pointer-events:none}
+  #grads i{position:absolute;top:0;width:1.5px;height:10px;border-radius:1px;background:${sub};opacity:.6}
+  #ticks .now{font-weight:700;color:${text}}
   #now{position:absolute;top:-2px;width:2px;height:14px;background:${text};border-radius:1px}
   #msg{position:absolute;top:${insets.top + 8}px;left:64px;right:76px;z-index:1000;text-align:center;font-size:13px;padding:6px 10px;display:none}
   .temp{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:17px;background:rgba(70,80,95,.85);color:#fff;font-weight:700;font-size:14px;border:1.5px solid rgba(255,255,255,.7)}
@@ -58,7 +61,7 @@ export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top
 <div id="panel" class="glass">
   <div id="top"><button id="play">▶</button><div><div id="title">Chargement…</div><div id="time"></div></div>
     <div id="modes"><button data-m="3h" class="on">3 h</button><button data-m="12h">12 h</button></div></div>
-  <div id="track"><input id="slider" type="range" min="0" max="0" value="0"><div id="now"></div></div>
+  <div id="track"><div id="grads"></div><input id="slider" type="range" min="0" max="0" value="0"><div id="now"></div></div>
   <div id="ticks"></div>
 </div>
 <script>
@@ -257,7 +260,10 @@ function setMode(m){
   var list=frames[m],s=document.getElementById('slider');s.max=Math.max(0,(list.length-1)*STEPS);
   var now=Date.now()/1000,ni=0;list.forEach(function(f,k){if(f.t<=now+60)ni=k});
   var ticks=document.getElementById('ticks');ticks.innerHTML='';
-  var n=5;for(var k=0;k<n;k++){var f=list[Math.round(k*(list.length-1)/(n-1))];if(!f)continue;var sp=document.createElement('span');sp.textContent=Math.abs(f.t-now)<450?'Maint.':(m==='12h'?hh(f.t):hm(f.t));ticks.appendChild(sp)}
+  var n=5;for(var k=0;k<n;k++){var f=list[Math.round(k*(list.length-1)/(n-1))];if(!f)continue;var sp=document.createElement('span');var isNow=Math.abs(f.t-now)<450;sp.textContent=isNow?'Maint.':(m==='12h'?hh(f.t):hm(f.t));if(isNow)sp.className='now';ticks.appendChild(sp)}
+  // une graduation par heure pleine sur la piste
+  var grads=document.getElementById('grads');grads.innerHTML='';
+  if(list.length>1){var t0=list[0].t,t1=list[list.length-1].t;for(var h=Math.ceil(t0/3600)*3600;h<=t1;h+=3600){var g=document.createElement('i');g.style.left=((h-t0)/(t1-t0)*100)+'%';grads.appendChild(g)}}
   document.getElementById('now').style.left=(list.length>1?ni/(list.length-1)*100:0)+'%';
   show(ni);
 }
