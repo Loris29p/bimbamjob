@@ -1,8 +1,9 @@
 // Détail d'un indicateur : choix du jour, graphique sur 24 h, synthèse.
+import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Fragment, type ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chart, interp } from '../components/Chart';
 import { DIM, Icon, T } from '../components/ui';
@@ -52,7 +53,7 @@ export default function Detail() {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
         <Header title={m.title} icon={m.icon} onTitle={() => setMenu((v) => !v)} />
-        {menu ? <MetricMenu current={metric} onPick={(id) => { setMetric(id); setMenu(false); }} /> : null}
+        {menu ? <FloatingMenu top={insets.top + 64} current={metric} onClose={() => setMenu(false)} onPick={(id) => { setMetric(id); setMenu(false); }} /> : null}
         <T style={{ color: DIM, marginTop: 20 }}>Données indisponibles pour cet indicateur.</T>
       </View>
     );
@@ -177,9 +178,9 @@ export default function Detail() {
   const chartW = width - 32;
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 30 }}>
       <Header title={m.title} icon={m.icon} onTitle={() => setMenu((v) => !v)} />
-      {menu ? <MetricMenu current={metric} onPick={(id) => { setMetric(id); setSecond(false); setMenu(false); }} /> : null}
 
       <View style={styles.days}>
         {days.map((dd, i) => {
@@ -347,6 +348,10 @@ export default function Detail() {
         {!day.meteoFrance ? <T style={{ color: DIM, marginTop: 6 }}>Pour ce jour, il s’agit d’une tendance (modèle ECMWF), moins précise.</T> : null}
       </View>
     </ScrollView>
+      {menu ? (
+        <FloatingMenu top={insets.top + 64} current={metric} onClose={() => setMenu(false)} onPick={(id) => { tick(); setMetric(id); setSecond(false); setMenu(false); }} />
+      ) : null}
+    </View>
   );
 }
 
@@ -419,6 +424,18 @@ function visWord(km: number) {
 
 const ORDER: MetricId[] = ['temp', 'rain', 'wind', 'uv', 'humidity', 'pressure', 'visibility'];
 
+/** Menu flottant iOS : par-dessus le contenu, fermé en touchant ailleurs. */
+function FloatingMenu({ top, current, onPick, onClose }: { top: number; current: MetricId; onPick: (id: MetricId) => void; onClose: () => void }) {
+  return (
+    <Pressable style={[StyleSheet.absoluteFill, { zIndex: 10 }]} onPress={onClose}>
+      <View style={[styles.floating, { top }]}>
+        {Platform.OS === 'ios' ? <BlurView intensity={80} tint="systemThickMaterialDark" style={StyleSheet.absoluteFill} /> : null}
+        <MetricMenu current={current} onPick={onPick} />
+      </View>
+    </Pressable>
+  );
+}
+
 function MetricMenu({ current, onPick }: { current: MetricId; onPick: (id: MetricId) => void }) {
   return (
     <View style={styles.menu}>
@@ -464,8 +481,9 @@ const styles = StyleSheet.create({
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '700' },
   titleBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)' },
-  menu: { backgroundColor: '#222B38', borderRadius: 14, marginBottom: 14, overflow: 'hidden' },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  menu: { overflow: 'hidden' },
+  floating: { position: 'absolute', alignSelf: 'center', width: 260, borderRadius: 16, overflow: 'hidden', backgroundColor: Platform.OS === 'ios' ? 'rgba(60,60,67,0.35)' : '#2C2C2E', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
   menuSep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)', marginLeft: 43 },
   topTxt: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
   subTitle: { fontSize: 17, fontWeight: '700', marginTop: 18, marginBottom: 6 },
