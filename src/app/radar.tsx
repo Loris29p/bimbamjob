@@ -118,27 +118,28 @@ export default function Radar() {
         ))}
 
         {others.map((o, i) => (
-          <Marker key={`o${i}`} coordinate={{ latitude: o.lat, longitude: o.lon }} anchor={{ x: 0.5, y: 17 / 58 }}>
+          <Marker key={`o${i}`} coordinate={{ latitude: o.lat, longitude: o.lon }} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.place}>
               <View style={styles.placeDot}>
                 <Text style={styles.placeTemp}>{info?.others[i] != null ? Math.round(info.others[i]!) : '–'}</Text>
               </View>
-              <Text style={[styles.name, { color: text, textShadowColor: halo }]} numberOfLines={1}>
+              <Text style={[styles.name, styles.placeName, { color: text, textShadowColor: halo }]} numberOfLines={1}>
                 {o.name}
               </Text>
             </View>
           </Marker>
         ))}
 
-        {/* Lieu affiché : bulle avec température et temps (la pointe est sur le lieu) */}
-        <Marker coordinate={{ latitude: lat, longitude: lon }} anchor={{ x: 0.5, y: 77 / 108 }} zIndex={10}>
+        {/* Lieu affiché : bulle avec température et temps. Apple Plans centre toujours le dessin
+            sur le lieu (la prop anchor ne vaut que pour Google Maps) : la pointe est donc au centre. */}
+        <Marker coordinate={{ latitude: lat, longitude: lon }} anchor={{ x: 0.5, y: 0.5 }} zIndex={10}>
           <View style={styles.me}>
             <View style={styles.bubble}>
               <Text style={styles.bubbleTemp}>{me?.temp != null ? `${Math.round(me.temp)}°` : '–'}</Text>
               {me?.code != null ? <Icon name={symbolFor(me.code, me.day)} size={24} color="#FFFFFF" /> : null}
             </View>
             <View style={styles.tail} />
-            <Text style={[styles.name, { color: text, textShadowColor: halo }]} numberOfLines={1}>
+            <Text style={[styles.name, styles.meName, { color: text, textShadowColor: halo }]} numberOfLines={1}>
               {here}
             </Text>
           </View>
@@ -215,7 +216,9 @@ export default function Radar() {
 const styles = StyleSheet.create({
   abs: { position: 'absolute' },
   engine: { position: 'absolute', width: 2, height: 2, left: 0, top: 0, opacity: 0 },
-  me: { width: 160, height: 108, alignItems: 'center' },
+  // Bulle 66 + pointe 10 (−2) : la pointe arrive à 74 → hauteur 148 pour qu'elle soit au centre.
+  // Largeur = celle de la bulle ; le nom déborde de part et d'autre, centré.
+  me: { width: 66, height: 148, alignItems: 'center' },
   bubble: {
     width: 66,
     height: 66,
@@ -242,8 +245,11 @@ const styles = StyleSheet.create({
     borderTopColor: '#FFFFFF',
     marginTop: -2,
   },
-  name: { marginTop: 5, fontSize: 13, fontWeight: '600', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
-  place: { width: 160, height: 58, alignItems: 'center' },
+  name: { fontSize: 13, fontWeight: '600', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } },
+  meName: { position: 'absolute', top: 79, left: -47, width: 160, textAlign: 'center' },
+  // Pastille 34 au centre ; le nom en dessous déborde sans changer la taille du repère.
+  place: { width: 34, height: 34 },
+  placeName: { position: 'absolute', top: 38, left: -63, width: 160, textAlign: 'center' },
   placeDot: {
     width: 34,
     height: 34,

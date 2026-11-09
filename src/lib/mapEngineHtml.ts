@@ -31,6 +31,19 @@ function dec(l){return LMIN*Math.pow(LMAX/LMIN,(l-1)/254)}
 var PAL=new Uint8ClampedArray(1024);
 for(var l=1;l<256;l++){var cc=color(dec(l));if(cc){PAL[l*4]=cc[0];PAL[l*4+1]=cc[1];PAL[l*4+2]=cc[2];PAL[l*4+3]=Math.round(cc[3]*255)}}
 
+// Adoucit les intensités (deux flous en boîte ≈ flou gaussien, rayon r pixels) : bords fondus,
+// plus de « pixels » carrés. Fait en JavaScript car le flou du canvas n'existe pas partout sur iPhone.
+function soften(F,W,H,r){
+  var T=new Float32Array(F.length),n=2*r+1;
+  for(var pass=0;pass<2;pass++){
+    for(var y=0;y<H;y++){var row=y*W,s=0;for(var x=-r;x<=r;x++)s+=F[row+Math.min(W-1,Math.max(0,x))];
+      for(var x=0;x<W;x++){T[row+x]=s/n;s+=F[row+Math.min(W-1,x+r+1)]-F[row+Math.max(0,x-r)]}}
+    for(var x=0;x<W;x++){var s=0;for(var y=-r;y<=r;y++)s+=T[Math.min(H-1,Math.max(0,y))*W+x];
+      for(var y=0;y<H;y++){F[y*W+x]=s/n;s+=T[Math.min(H-1,y+r+1)*W+x]-T[Math.max(0,y-r)*W+x]}}
+  }
+}
+// Intensités codées (0–255) → couleurs de la palette
+function paint(F,d){for(var j=0;j<F.length;j++){var L=Math.round(F[j]);if(L<1)continue;L*=4;var o=j*4;d[o]=PAL[L];d[o+1]=PAL[L+1];d[o+2]=PAL[L+2];d[o+3]=PAL[L+3]}}
 // Adoucit une image (flou) si le navigateur le permet, puis la convertit en image PNG (data URI).
 function finish(src,blur,scale){
   var c=document.createElement('canvas');c.width=src.width*scale;c.height=src.height*scale;var x=c.getContext('2d');
@@ -58,14 +71,15 @@ var PALETTES={
 };
 // Valeurs de la grille interpolées sur l'image ; stops absent = pluie (palette PAL)
 function renderGrid(A,stops){
-  var ctx=gridCanvas.getContext('2d'),img=ctx.createImageData(FS,FS),d=img.data;
+  var ctx=gridCanvas.getContext('2d'),img=ctx.createImageData(FS,FS),d=img.data,R=stops?null:new Float32Array(FS*FS);
   for(var y=0;y<FS;y++){var gy=y/(FS-1)*(N-1),i0=Math.floor(gy),i1=Math.min(N-1,i0+1),fy=gy-i0;
     for(var x=0;x<FS;x++){var gx=x/(FS-1)*(N-1),j0=Math.floor(gx),j1=Math.min(N-1,j0+1),fx=gx-j0;
       var v=A[i0*N+j0]*(1-fx)*(1-fy)+A[i0*N+j1]*fx*(1-fy)+A[i1*N+j0]*(1-fx)*fy+A[i1*N+j1]*fx*fy,o=(y*FS+x)*4;
-      if(!stops){var L=enc(v)*4;if(!L)continue;d[o]=PAL[L];d[o+1]=PAL[L+1];d[o+2]=PAL[L+2];d[o+3]=PAL[L+3]}
+      if(!stops){R[y*FS+x]=enc(v)}
       else{if(!isFinite(v))continue;var c=lerpStops(stops,v);d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=Math.round(c[3]*255)}}}
+  if(R){soften(R,FS,FS,4);paint(R,d)}
   ctx.putImageData(img,0,0);
-  return{uri:finish(gridCanvas,stops?4:5,2),bounds:[[grid.n,grid.e],[grid.s,grid.w]]};
+  return{uri:finish(gridCanvas,0,2),bounds:[[grid.n,grid.e],[grid.s,grid.w]]};
 }
 var fcCache={};
 
@@ -115,11 +129,12 @@ function radarImage(path){
   for(var y=T.y0;y<=T.y1;y++)for(var x=T.x0;x<=T.x1;x++)jobs.push(levels(rvHost+path+'/256/'+T.z+'/'+(((x%m)+m)%m)+'/'+y+'/2/1_0.png'));
   return radCache[key]=Promise.all(jobs).then(function(arr){
     var nx=T.x1-T.x0+1,ny=T.y1-T.y0+1,c=document.createElement('canvas');c.width=nx*256;c.height=ny*256;
-    var ctx=c.getContext('2d'),img=ctx.createImageData(c.width,c.height),d=img.data,W=c.width;
+    var ctx=c.getContext('2d'),img=ctx.createImageData(c.width,c.height),d=img.data,W=c.width,H=c.height,F=new Float32Array(W*H);
     arr.forEach(function(A,k){if(!A)return;var ox=(k%nx)*256,oy=Math.floor(k/nx)*256;
-      for(var j=0;j<65536;j++){var L=A[j];if(!L)continue;L*=4;var o=((oy+(j>>8))*W+ox+(j&255))*4;d[o]=PAL[L];d[o+1]=PAL[L+1];d[o+2]=PAL[L+2];d[o+3]=PAL[L+3]}});
+      for(var j=0;j<65536;j++){if(A[j])F[(oy+(j>>8))*W+ox+(j&255)]=A[j]}});
+    soften(F,W,H,1);paint(F,d);
     ctx.putImageData(img,0,0);
-    return{uri:finish(c,1.2,1),bounds:T.bounds};
+    return{uri:finish(c,0,1),bounds:T.bounds};
   });
 }
 
