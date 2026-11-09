@@ -14,6 +14,8 @@ export type QuarterPoint = {
   windSpeed: number | null;
   windGusts: number | null;
   windDirection: number | null;
+  weatherCode: number | null;
+  isDay: boolean;
 };
 export type Minutely = QuarterPoint[];
 
@@ -99,7 +101,7 @@ export async function fetchForecast(place: Place): Promise<Forecast> {
   const mfUrl =
     `${BASE}?${common}&models=meteofrance_seamless&forecast_days=4` +
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,cloud_cover,is_day' +
-    '&minutely_15=precipitation,temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m&forecast_minutely_15=24&past_minutely_15=0' +
+    '&minutely_15=precipitation,temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,is_day&forecast_minutely_15=24&past_minutely_15=0' +
     `&hourly=${hourlyVars}&daily=${dailyVars}`;
 
   // 2) Meilleur modèle disponible : compléments + tendance 14 jours
@@ -135,6 +137,8 @@ export async function fetchForecast(place: Place): Promise<Forecast> {
     windSpeed: opt(m.wind_speed_10m?.[i]),
     windGusts: opt(m.wind_gusts_10m?.[i]),
     windDirection: opt(m.wind_direction_10m?.[i]),
+    weatherCode: opt(m.weather_code?.[i]),
+    isDay: m.is_day?.[i] !== 0,
   }));
 
   // Horaire : sur toute la période du modèle « best », Météo-France prioritaire quand il existe.

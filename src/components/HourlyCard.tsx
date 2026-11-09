@@ -179,7 +179,11 @@ function QuarterStrip({ quarters, mode }: { quarters: Minutely; mode: Mode }) {
           ) : (
             <>
               <View style={styles.iconBox}>
-                {q.precipitation >= 0.05 ? <Icon name={{ ios: 'cloud.rain.fill', android: 'rainy' }} size={24} multicolor /> : <T style={styles.small}> </T>}
+                {q.weatherCode !== null ? (
+                  <Icon name={symbolFor(q.weatherCode, q.isDay)} size={26} multicolor />
+                ) : q.precipitation >= 0.05 ? (
+                  <Icon name={{ ios: 'cloud.rain.fill', android: 'rainy' }} size={24} multicolor />
+                ) : null}
               </View>
               <T style={styles.value}>{q.temperature !== null ? `${q.temperature.toFixed(1)}°` : '–'}</T>
             </>

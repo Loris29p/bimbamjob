@@ -55,8 +55,15 @@ export default function Detail() {
 
   const values = [...main.map((p) => p.v), ...alt.map((p) => p.v)];
   const [yMin, yMax] = m.fixedRange ?? (metric === 'temp' ? niceRange(values, 2, 3) : metric === 'pressure' ? niceRange(values, 2, 5) : niceRange([0, ...values], 0, 10));
-  const step = (yMax - yMin) / 5;
-  const ticks = Array.from({ length: 6 }, (_, i) => Math.round((yMin + step * i) * 10) / 10);
+  // Graduations « rondes » (1, 2, 3, 5, 10, 20…) pour 4 à 6 lignes
+  const raw = (yMax - yMin) / 5;
+  const step = [1, 2, 3, 5, 10, 20, 25, 50].find((s) => s >= raw) ?? Math.ceil(raw / 50) * 50;
+  const lo = Math.floor(yMin / step) * step;
+  const ticks: number[] = [];
+  for (let v = lo; ; v += step) {
+    ticks.push(Math.round(v * 10) / 10);
+    if (v >= yMax - 1e-6 || ticks.length > 12) break;
+  }
 
   const hiP = main.reduce((a, b) => (b.v > a.v ? b : a));
   const loP = main.reduce((a, b) => (b.v < a.v ? b : a));
@@ -130,8 +137,8 @@ export default function Detail() {
         series={metric === 'rain' ? [] : [{ values: main, color: m.color }, ...(alt.length ? [{ values: alt, color: 'rgba(255,255,255,0.7)', dashed: true, fill: false }] : [])]}
         bars={metric === 'rain' ? main : undefined}
         barColor={m.color}
-        yMin={yMin}
-        yMax={yMax}
+        yMin={ticks[0]}
+        yMax={ticks[ticks.length - 1]}
         yTicks={ticks}
         formatY={(v) => (metric === 'temp' ? `${Math.round(v)}°` : metric === 'pressure' ? `${Math.round(v)}` : `${Math.round(v)}`)}
         now={isToday ? nowSec : undefined}
