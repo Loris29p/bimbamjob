@@ -1,8 +1,8 @@
 // Fond vivant : dégradé selon le ciel + nuages qui dérivent, pluie, neige, étoiles, éclairs.
 // Animations natives (useNativeDriver) pour rester fluide.
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { backgroundFor, skyOf } from '../lib/sky';
 
@@ -101,6 +101,13 @@ function Lightning() {
 
 export function SkyBackground({ code, isDay, cloudCover = 50, rate = 0 }: { code?: number; isDay?: boolean; cloudCover?: number; rate?: number }) {
   const { width, height } = useWindowDimensions();
+  // Réglage iOS « Réduire les animations » : on garde le fond sans mouvement
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => sub.remove();
+  }, []);
   const colors = code === undefined ? (['#2B5C9E', '#4D7FBF', '#7FA6D6'] as const) : backgroundFor(code, isDay !== false);
   const sky = code === undefined ? 'cloudy' : skyOf(code);
   const dark = isDay === false;
@@ -109,7 +116,10 @@ export function SkyBackground({ code, isDay, cloudCover = 50, rate = 0 }: { code
   const wet = sky === 'rain' || sky === 'storm' || snow;
   const drops = !wet ? 0 : snow ? 45 : rate >= 4 || sky === 'storm' ? 90 : 55;
   const stars = dark && (sky === 'clear' || sky === 'partly') ? 45 : 0;
-  const ids = useMemo(() => ({ c: [...Array(clouds).keys()], d: [...Array(drops).keys()], s: [...Array(stars).keys()] }), [clouds, drops, stars]);
+  const ids = useMemo(
+    () => (reduce ? { c: [], d: [], s: [] } : { c: [...Array(clouds).keys()], d: [...Array(drops).keys()], s: [...Array(stars).keys()] }),
+    [clouds, drops, stars, reduce],
+  );
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -123,7 +133,7 @@ export function SkyBackground({ code, isDay, cloudCover = 50, rate = 0 }: { code
       {ids.d.map((i) => (
         <Drop key={`d${i}`} i={i} width={width} height={height} snow={snow} heavy={sky === 'storm' || rate >= 4} />
       ))}
-      {sky === 'storm' ? <Lightning /> : null}
+      {sky === 'storm' && !reduce ? <Lightning /> : null}
     </View>
   );
 }

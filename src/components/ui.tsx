@@ -9,8 +9,8 @@ export type PinInfo = { scrollY: Animated.Value; top: number; content: RefObject
 export const PinContext = createContext<PinInfo | null>(null);
 
 export const WHITE = '#FFFFFF';
-export const DIM = 'rgba(255,255,255,0.62)';
-export const LINE = 'rgba(255,255,255,0.22)';
+export const DIM = 'rgba(235,235,245,0.6)'; // secondaryLabel iOS
+export const LINE = 'rgba(235,235,245,0.18)'; // separator iOS
 export const RAIN_BLUE = '#8FD3FF';
 
 export function T({ style, ...rest }: TextProps) {
@@ -92,5 +92,5 @@ const styles = StyleSheet.create({
   },
   headerWrap: { marginHorizontal: -16, marginTop: -16, paddingHorizontal: 16, paddingTop: 16, marginBottom: 10, zIndex: 2, overflow: 'hidden' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.2)' },
-  title: { color: DIM, fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
+  title: { color: DIM, fontSize: 13, fontWeight: '600', letterSpacing: -0.08 },
 });

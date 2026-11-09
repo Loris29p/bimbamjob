@@ -6,6 +6,7 @@ import { FlatList, Platform, Pressable, StyleSheet, View, useWindowDimensions } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/ui';
 import { WeatherPage } from '../components/WeatherPage';
+import { tick } from '../lib/hig';
 import { usePlaces } from '../lib/PlaceContext';
 import { placeKey, type Place } from '../lib/types';
 
@@ -34,7 +35,11 @@ export default function Home() {
         keyExtractor={placeKey}
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         initialScrollIndex={activeIndex}
-        onMomentumScrollEnd={(e) => setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+        onMomentumScrollEnd={(e) => {
+          const i = Math.round(e.nativeEvent.contentOffset.x / width);
+          if (i !== activeIndex) tick();
+          setActiveIndex(i);
+        }}
         renderItem={({ item }) => <WeatherPage place={item} bottomInset={bottom} />}
       />
 

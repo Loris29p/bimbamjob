@@ -4,6 +4,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
+import { tick } from '../lib/hig';
 import { T } from './ui';
 
 export type Series = { values: { t: number; v: number }[]; color: string; dashed?: boolean; fill?: boolean };
@@ -48,7 +49,17 @@ export function Chart({ width, height = 220, dayStart, series, bars, barColor = 
   const cut = now !== undefined && now > dayStart && now < dayStart + 86400 ? now : null;
 
   // Lecture au doigt
-  const [scrub, setScrub] = useState<number | null>(null);
+  const [scrub, setScrubRaw] = useState<number | null>(null);
+  // petit retour haptique à chaque nouvelle heure pendant la lecture au doigt
+  const lastHour = useRef<number | null>(null);
+  const setScrub = (t: number | null) => {
+    const h = t === null ? null : Math.floor(t / 3600);
+    if (h !== null && h !== lastHour.current) tick();
+    lastHour.current = h;
+    setScrubRaw(t);
+  };
+  const setRef = useRef(setScrub);
+  setRef.current = setScrub;
   const toTime = (px: number) => dayStart + Math.max(0, Math.min(1, px / w)) * 86400;
   const xRef = useRef(toTime);
   xRef.current = toTime;
@@ -58,10 +69,10 @@ export function Chart({ width, height = 220, dayStart, series, bars, barColor = 
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
         onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: (e) => setScrub(xRef.current(e.nativeEvent.locationX)),
-        onPanResponderMove: (e) => setScrub(xRef.current(e.nativeEvent.locationX)),
-        onPanResponderRelease: () => setScrub(null),
-        onPanResponderTerminate: () => setScrub(null),
+        onPanResponderGrant: (e) => setRef.current(xRef.current(e.nativeEvent.locationX)),
+        onPanResponderMove: (e) => setRef.current(xRef.current(e.nativeEvent.locationX)),
+        onPanResponderRelease: () => setRef.current(null),
+        onPanResponderTerminate: () => setRef.current(null),
       }),
     [],
   );

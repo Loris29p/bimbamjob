@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { T } from '../components/ui';
 import { WeatherPage } from '../components/WeatherPage';
+import { tap } from '../lib/hig';
 import { usePlaces } from '../lib/PlaceContext';
 import type { Place } from '../lib/types';
 
@@ -23,6 +24,7 @@ export default function Apercu() {
         <Pressable
           hitSlop={10}
           onPress={() => {
+            tap();
             setActiveIndex(addPlace(place));
             router.dismissTo('/');
           }}

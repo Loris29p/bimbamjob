@@ -5,6 +5,7 @@ import { upcomingHours, upcomingMinutely, type DayPoint, type HourPoint, type Mi
 import { hour, temp, time } from '../lib/format';
 import { symbolFor } from '../lib/sky';
 import { isRainy, weatherLabel, windDirection } from '../lib/weatherCodes';
+import { tick } from '../lib/hig';
 import { DIM, Glass, Icon, RAIN_BLUE, T } from './ui';
 
 export type Mode = 'temp' | 'rain' | 'wind';
@@ -66,7 +67,7 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
         </Pressable>
         <View style={styles.modes}>
           {MODES.map((m) => (
-            <Pressable key={m.id} onPress={() => setMode(m.id)} accessibilityRole="button" accessibilityLabel={m.label} style={[styles.mode, mode === m.id && styles.modeOn]} hitSlop={4}>
+            <Pressable key={m.id} onPress={() => { if (m.id !== mode) tick(); setMode(m.id); }} accessibilityRole="button" accessibilityLabel={m.label} style={[styles.mode, mode === m.id && styles.modeOn]} hitSlop={4}>
               <Icon name={m.icon} size={15} />
             </Pressable>
           ))}
@@ -138,7 +139,7 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
                 : ' '}
         </T>
         {quarters.length ? (
-          <Pressable onPress={() => setQuarter((q) => !q)} style={[styles.chip, quarter && styles.modeOn]} hitSlop={6}>
+          <Pressable onPress={() => { tick(); setQuarter((q) => !q); }} style={[styles.chip, quarter && styles.modeOn]} hitSlop={6}>
             <T style={{ fontSize: 12, fontWeight: '700' }}>15 min</T>
           </Pressable>
         ) : null}
@@ -197,16 +198,16 @@ const styles = StyleSheet.create({
   bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.18)' },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  summary: { fontSize: 15, lineHeight: 20 },
+  summary: { fontSize: 15, lineHeight: 20, letterSpacing: -0.24 },
   modes: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 16, padding: 2 },
-  mode: { width: 34, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  mode: { width: 40, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   modeOn: { backgroundColor: 'rgba(255,255,255,0.25)' },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 12 },
   col: { width: 54, alignItems: 'center' },
-  hour: { fontSize: 14, fontWeight: '600' },
+  hour: { fontSize: 15, fontWeight: '600', letterSpacing: -0.24 },
   iconBox: { height: 52, alignItems: 'center', justifyContent: 'center' },
   prob: { color: RAIN_BLUE, fontSize: 11, fontWeight: '700', marginTop: 2 },
-  value: { fontSize: 19, fontWeight: '500' },
+  value: { fontSize: 20, fontWeight: '500', letterSpacing: 0.38, fontVariant: ['tabular-nums'] },
   rainBar: { width: 14, borderRadius: 3, backgroundColor: RAIN_BLUE },
   smallBlue: { fontSize: 11, color: RAIN_BLUE, fontWeight: '600' },
   small: { fontSize: 11, color: DIM },

@@ -8,6 +8,7 @@ import { Chart, interp } from '../components/Chart';
 import { DIM, Icon, T } from '../components/ui';
 import { hoursOfDay, startOfDay, type DayPoint, type HourPoint } from '../lib/forecast';
 import { hour, temp } from '../lib/format';
+import { tick } from '../lib/hig';
 import { METRICS, type MetricId } from '../lib/metrics';
 import { usePlaces } from '../lib/PlaceContext';
 import { symbolFor } from '../lib/sky';
@@ -185,7 +186,7 @@ export default function Detail() {
           const date = new Date(dd.time * 1000);
           const sel = i === dayIdx;
           return (
-            <Pressable key={dd.time} onPress={() => setDayIdx(i)} style={styles.dayCol} hitSlop={4}>
+            <Pressable key={dd.time} onPress={() => { if (i !== dayIdx) tick(); setDayIdx(i); }} style={styles.dayCol} hitSlop={4}>
               <T style={styles.dayLetter}>{LETTERS[date.getDay()]}</T>
               <View style={[styles.dayNum, sel && styles.daySel]}>
                 <T style={[styles.dayNumText, sel && { color: '#0B1520', fontWeight: '700' }]}>{date.getDate()}</T>
@@ -458,7 +459,7 @@ function beaufortOf(kmh: number) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#141A24', paddingHorizontal: 16 },
+  screen: { flex: 1, backgroundColor: '#1C1C1E', paddingHorizontal: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '700' },
@@ -483,8 +484,8 @@ const styles = StyleSheet.create({
   days: { flexDirection: 'row', justifyContent: 'space-between' },
   dayCol: { alignItems: 'center', gap: 6 },
   dayLetter: { fontSize: 12, color: DIM, fontWeight: '600' },
-  dayNum: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  daySel: { backgroundColor: '#7CC0FF' },
+  dayNum: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  daySel: { backgroundColor: '#64D2FF' },
   dayNumText: { fontSize: 17 },
   date: { textAlign: 'center', fontSize: 15, marginTop: 8, color: DIM },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 14 },
@@ -495,7 +496,7 @@ const styles = StyleSheet.create({
   segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: 3, marginTop: 14 },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8 },
   segOn: { backgroundColor: 'rgba(255,255,255,0.22)' },
-  box: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: 14, marginTop: 14 },
-  boxTitle: { fontSize: 13, fontWeight: '700', color: DIM, marginBottom: 8, textTransform: 'uppercase' },
+  box: { backgroundColor: '#2C2C2E', borderRadius: 12, padding: 16, marginTop: 16 },
+  boxTitle: { fontSize: 13, fontWeight: '600', color: DIM, marginBottom: 8, textTransform: 'uppercase', letterSpacing: -0.08 },
   chip: { backgroundColor: 'rgba(90,200,250,0.18)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, fontSize: 13 },
 });

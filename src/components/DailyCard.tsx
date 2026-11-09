@@ -104,16 +104,16 @@ export function DailyCard({ daily, hourly, currentTemp, mode = 'temp' }: { daily
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', height: 50, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', height: 52, gap: 8 },
   border: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LINE },
-  day: { width: 46, fontSize: 18, fontWeight: '500' },
+  day: { width: 50, fontSize: 20, fontWeight: '500', letterSpacing: 0.38 },
   iconBox: { width: 40, alignItems: 'center' },
   prob: { color: RAIN_BLUE, fontSize: 11, fontWeight: '700' },
-  min: { width: 36, textAlign: 'right', fontSize: 18, color: DIM },
+  min: { width: 38, textAlign: 'right', fontSize: 20, fontWeight: '500', color: DIM, fontVariant: ['tabular-nums'] },
   track: { flex: 1, height: 5, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.18)' },
   range: { position: 'absolute', top: 0, bottom: 0, borderRadius: 3 },
   now: { position: 'absolute', top: -1.5, width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.25)' },
-  max: { width: 36, fontSize: 18, fontWeight: '500' },
+  max: { width: 38, fontSize: 20, fontWeight: '500', fontVariant: ['tabular-nums'] },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 24 },
   barSlot: { width: 7, height: 24, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'flex-end', overflow: 'hidden' },
   barFill: { backgroundColor: RAIN_BLUE, borderRadius: 2 },

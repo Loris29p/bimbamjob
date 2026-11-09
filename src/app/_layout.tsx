@@ -10,9 +10,9 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="villes" options={{ animation: 'fade' }} />
         <Stack.Screen name="radar" options={{ presentation: 'fullScreenModal' }} />
-        <Stack.Screen name="vigilance" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="detail" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="apercu" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="vigilance" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
+        <Stack.Screen name="detail" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
+        <Stack.Screen name="apercu" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
       </Stack>
     </PlaceProvider>
   );

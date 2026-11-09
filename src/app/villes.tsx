@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DIM, Icon, T } from '../components/ui';
 import { temp, time } from '../lib/format';
 import { searchCities } from '../lib/geocoding';
+import { tap, tick } from '../lib/hig';
 import { usePlaces } from '../lib/PlaceContext';
 import { backgroundFor } from '../lib/sky';
 import { placeKey, type Place } from '../lib/types';
@@ -69,7 +70,7 @@ export default function Cities() {
   const confirmRemove = (p: Place) =>
     Alert.alert(p.name, 'Retirer cette ville de la liste ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Retirer', style: 'destructive', onPress: () => removePlace(p) },
+      { text: 'Retirer', style: 'destructive', onPress: () => { tap(); removePlace(p); } },
     ]);
 
   return (
@@ -135,13 +136,13 @@ export default function Cities() {
               edit={
                 editing && !item.isGps ? (
                   <View style={{ alignItems: 'center', gap: 6 }}>
-                    <Pressable hitSlop={6} onPress={() => movePlace(item, -1)} accessibilityLabel="Monter">
+                    <Pressable hitSlop={6} onPress={() => { tick(); movePlace(item, -1); }} accessibilityLabel="Monter">
                       <Icon name={{ ios: 'chevron.up', android: 'expand_less' }} size={16} />
                     </Pressable>
                     <Pressable hitSlop={6} onPress={() => confirmRemove(item)} accessibilityLabel="Supprimer" style={styles.del}>
                       <Icon name={{ ios: 'minus', android: 'remove' }} size={14} />
                     </Pressable>
-                    <Pressable hitSlop={6} onPress={() => movePlace(item, 1)} accessibilityLabel="Descendre">
+                    <Pressable hitSlop={6} onPress={() => { tick(); movePlace(item, 1); }} accessibilityLabel="Descendre">
                       <Icon name={{ ios: 'chevron.down', android: 'expand_more' }} size={16} />
                     </Pressable>
                   </View>
