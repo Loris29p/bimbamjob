@@ -76,7 +76,11 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
         maskElement={
           <View style={{ flex: 1 }}>
             <Animated.View style={{ height: compactHeight, backgroundColor: '#000', opacity: maskTop }} />
-            <LinearGradient colors={['rgba(0,0,0,0)', '#000']} style={{ height: 14 }} />
+            {/* fondu sous l'en-tête : actif seulement une fois l'en-tête replié (sinon il coupait le nom de la ville) */}
+            <View style={{ height: 14 }}>
+              <LinearGradient colors={['rgba(0,0,0,0)', '#000']} style={StyleSheet.absoluteFill} />
+              <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: maskTop }]} />
+            </View>
             <View style={{ flex: 1, backgroundColor: '#000' }} />
           </View>
         }
