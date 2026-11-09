@@ -3,8 +3,8 @@ import MaskedViewBase from '@react-native-masked-view/masked-view';
 import type { ComponentType, ReactNode } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Platform, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, type HostInstance, Platform, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { minutesUntilRain } from '../lib/forecast';
 import { temp, time } from '../lib/format';
@@ -24,7 +24,7 @@ import { ago, ObservationCard, pretty } from './ObservationCard';
 import { RainCard } from './RainCard';
 import { SkyBackground } from './SkyBackground';
 import { Tiles } from './Tiles';
-import { DIM, T } from './ui';
+import { DIM, PinContext, T } from './ui';
 import { VigilanceBanner } from './VigilanceBanner';
 
 // Les types fournis par la bibliothèque datent d'avant React 19.
@@ -65,6 +65,8 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
   const compactHeight = insets.top + 62;
   const maskTop = scrollY.interpolate({ inputRange: [70, 140], outputRange: [1, 0], extrapolate: 'clamp' });
   const [mode, setMode] = useState<Mode>('temp');
+  const contentRef = useRef<HostInstance>(null);
+  const pin = useMemo(() => ({ scrollY, top: compactHeight, content: contentRef }), [scrollY, compactHeight]);
 
   return (
     <View style={{ width, height }}>
@@ -86,6 +88,8 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
         refreshControl={<RefreshControl refreshing={loading && !!forecast} onRefresh={refresh} tintColor="#fff" />}
         showsVerticalScrollIndicator={false}
       >
+        <PinContext.Provider value={pin}>
+        <View ref={contentRef} collapsable={false}>
         <Animated.View style={[styles.header, { opacity: bigOpacity, transform: [{ translateY: headerShift }] }]}>
           {place.isGps && place.name !== 'Ma position' ? <T style={styles.myPos}>MA POSITION</T> : null}
           <T style={styles.city} numberOfLines={1}>
@@ -122,13 +126,15 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
             </Pressable>
             {obs ? <ObservationCard obs={obs} /> : null}
             <AirCard place={place} />
-            <Tiles forecast={forecast} obs={useObs ? obs : null} />
+            <Tiles forecast={forecast} obs={useObs ? obs : null} place={place} />
             <MoonCard />
             <T style={styles.source}>
               Prévisions : AROME et ARPEGE (Météo-France) · Mesures : stations Météo-France · Mise à jour {time(forecast.fetchedAt / 1000)}
             </T>
           </>
         ) : null}
+        </View>
+        </PinContext.Provider>
       </Animated.ScrollView>
       </MaskedView>
 

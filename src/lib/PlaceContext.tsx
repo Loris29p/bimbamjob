@@ -11,6 +11,7 @@ type Ctx = {
   setActiveIndex: (i: number) => void;
   addPlace: (p: Place) => number;
   removePlace: (p: Place) => void;
+  movePlace: (p: Place, dir: -1 | 1) => void;
   locate: () => Promise<void>;
   ready: boolean;
 };
@@ -72,9 +73,21 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     setActiveIndex(0);
   }, []);
 
+  const movePlace = useCallback((p: Place, dir: -1 | 1) => {
+    setSaved((list) => {
+      const i = list.findIndex((x) => placeKey(x) === placeKey(p));
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= list.length) return list;
+      const next = [...list];
+      [next[i], next[j]] = [next[j], next[i]];
+      saveFavorites(next);
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
-    () => ({ places, activeIndex: Math.min(activeIndex, places.length - 1), setActiveIndex, addPlace, removePlace, locate, ready }),
-    [places, activeIndex, addPlace, removePlace, locate, ready],
+    () => ({ places, activeIndex: Math.min(activeIndex, places.length - 1), setActiveIndex, addPlace, removePlace, movePlace, locate, ready }),
+    [places, activeIndex, addPlace, removePlace, movePlace, locate, ready],
   );
   return <PlaceContext.Provider value={value}>{children}</PlaceContext.Provider>;
 }

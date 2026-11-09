@@ -1,7 +1,7 @@
 // Liste des lieux + recherche de communes.
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DIM, Icon, T } from '../components/ui';
@@ -13,13 +13,15 @@ import { placeKey, type Place } from '../lib/types';
 import { useForecast } from '../lib/useForecast';
 import { weatherLabel } from '../lib/weatherCodes';
 
-function PlaceRow({ place, onPress, onLongPress }: { place: Place; onPress: () => void; onLongPress?: () => void }) {
+function PlaceRow({ place, onPress, onLongPress, edit }: { place: Place; onPress: () => void; onLongPress?: () => void; edit?: ReactNode }) {
   const { forecast } = useForecast(place);
   const c = forecast?.current;
   const today = forecast?.daily[0];
   const colors = c ? backgroundFor(c.weatherCode, c.isDay) : (['#2B5C9E', '#4D7FBF', '#7FA6D6'] as const);
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    {edit}
+    <Pressable onPress={onPress} onLongPress={onLongPress} style={({ pressed }) => [styles.row, { flex: 1 }, pressed && { opacity: 0.8 }]}>
       <LinearGradient colors={[colors[0], colors[1]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={{ flex: 1 }}>
         <T style={styles.name} numberOfLines={1}>
@@ -33,12 +35,14 @@ function PlaceRow({ place, onPress, onLongPress }: { place: Place; onPress: () =
         <T style={styles.sub}>{today ? `Max. ${temp(today.tMax)}  Min. ${temp(today.tMin)}` : ''}</T>
       </View>
     </Pressable>
+    </View>
   );
 }
 
 export default function Cities() {
   const insets = useSafeAreaInsets();
-  const { places, setActiveIndex, addPlace, removePlace } = usePlaces();
+  const { places, setActiveIndex, removePlace, movePlace } = usePlaces();
+  const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<(Place & { label: string })[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -72,9 +76,16 @@ export default function Cities() {
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <View style={styles.top}>
         <T style={styles.title}>Météo</T>
-        <Pressable hitSlop={12} onPress={() => router.back()}>
-          <T style={{ fontSize: 17, color: '#7CC0FF' }}>OK</T>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 18 }}>
+          {places.some((p) => !p.isGps) ? (
+            <Pressable hitSlop={12} onPress={() => setEditing((e) => !e)}>
+              <T style={{ fontSize: 17, color: '#7CC0FF', fontWeight: editing ? '700' : '400' }}>{editing ? 'Terminé' : 'Modifier'}</T>
+            </Pressable>
+          ) : null}
+          <Pressable hitSlop={12} onPress={() => router.back()}>
+            <T style={{ fontSize: 17, color: '#7CC0FF' }}>OK</T>
+          </Pressable>
+        </View>
       </View>
       <View style={styles.search}>
         <Icon name={{ ios: 'magnifyingglass', android: 'search' }} size={16} color={DIM} />
@@ -100,8 +111,11 @@ export default function Cities() {
             <Pressable
               style={styles.result}
               onPress={() => {
-                setQuery('');
-                open(addPlace(item));
+                // aperçu de la météo avant d'ajouter la ville
+                router.push({
+                  pathname: '/apercu',
+                  params: { name: item.name, department: item.department ?? '', lat: String(item.latitude), lon: String(item.longitude) },
+                });
               }}
             >
               <T style={{ fontSize: 17 }}>{item.label}</T>
@@ -114,9 +128,28 @@ export default function Cities() {
           keyExtractor={placeKey}
           contentContainerStyle={{ gap: 10, paddingBottom: insets.bottom + 20 }}
           renderItem={({ item, index }) => (
-            <PlaceRow place={item} onPress={() => open(index)} onLongPress={item.isGps ? undefined : () => confirmRemove(item)} />
+            <PlaceRow
+              place={item}
+              onPress={() => (editing ? undefined : open(index))}
+              onLongPress={item.isGps ? undefined : () => confirmRemove(item)}
+              edit={
+                editing && !item.isGps ? (
+                  <View style={{ alignItems: 'center', gap: 6 }}>
+                    <Pressable hitSlop={6} onPress={() => movePlace(item, -1)} accessibilityLabel="Monter">
+                      <Icon name={{ ios: 'chevron.up', android: 'expand_less' }} size={16} />
+                    </Pressable>
+                    <Pressable hitSlop={6} onPress={() => confirmRemove(item)} accessibilityLabel="Supprimer" style={styles.del}>
+                      <Icon name={{ ios: 'minus', android: 'remove' }} size={14} />
+                    </Pressable>
+                    <Pressable hitSlop={6} onPress={() => movePlace(item, 1)} accessibilityLabel="Descendre">
+                      <Icon name={{ ios: 'chevron.down', android: 'expand_more' }} size={16} />
+                    </Pressable>
+                  </View>
+                ) : null
+              }
+            />
           )}
-          ListFooterComponent={places.length > 1 ? <T style={styles.hint}>Appui long sur une ville pour la retirer.</T> : undefined}
+          ListFooterComponent={places.length > 1 ? <T style={styles.hint}>« Modifier » pour réordonner ou retirer des villes.</T> : undefined}
         />
       )}
     </View>
@@ -135,5 +168,6 @@ const styles = StyleSheet.create({
   cond: { fontSize: 14, color: DIM, marginTop: 'auto' },
   temp: { fontSize: 46, fontWeight: '300' },
   result: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.2)' },
+  del: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E5484D', alignItems: 'center', justifyContent: 'center' },
   hint: { color: DIM, fontSize: 12, textAlign: 'center', marginTop: 6 },
 });

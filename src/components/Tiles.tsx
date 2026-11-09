@@ -7,7 +7,10 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import type { MetricId } from '../lib/metrics';
 import { upcomingHours, type Forecast } from '../lib/forecast';
 import { temp, time } from '../lib/format';
+import { fetchNormal } from '../lib/normals';
 import type { Observation } from '../lib/observations';
+import { placeKey, type Place } from '../lib/types';
+import { useCached } from '../lib/useAsync';
 import { uvLabel, windFrom } from '../lib/weatherCodes';
 import { DIM, Glass, T, WHITE } from './ui';
 
@@ -104,7 +107,8 @@ function Scale({ ratio, colors }: { ratio: number; colors: string[] }) {
   );
 }
 
-export function Tiles({ forecast, obs }: { forecast: Forecast; obs: Observation | null }) {
+export function Tiles({ forecast, obs, place }: { forecast: Forecast; obs: Observation | null; place: Place }) {
+  const normal = useCached(`normal:${placeKey(place)}:${new Date().toDateString()}`, () => fetchNormal(place), 12 * 3600 * 1000);
   const model = forecast.current;
   // Les mesures des stations remplacent la prévision quand elles existent.
   const windMeasured = obs?.windSpeed != null && obs.windDirection != null;
@@ -149,6 +153,19 @@ export function Tiles({ forecast, obs }: { forecast: Forecast; obs: Observation 
         value={temp(c.apparent)}
         note={Math.abs(feels) < 1.5 ? 'Proche de la température réelle.' : feels < 0 ? 'Le vent ou l’humidité donnent une sensation plus froide.' : 'L’humidité donne une sensation plus chaude.'}
       />
+      {normal && today ? (
+        <Tile
+          title="Normale de saison"
+          metric="temp"
+          icon={{ ios: 'chart.line.uptrend.xyaxis', android: 'show_chart' }}
+          value={`${today.tMax - normal.tMax >= 0 ? '+' : '−'}${Math.abs(Math.round(today.tMax - normal.tMax))}°`}
+          note={`Max. du jour ${temp(today.tMax)}, normale ${temp(normal.tMax)} (moyenne ${normal.years} ans).`}
+        >
+          <T style={styles.small}>
+            {Math.abs(today.tMax - normal.tMax) < 1.5 ? 'Conforme aux normales' : today.tMax > normal.tMax ? 'Plus doux que la normale' : 'Plus frais que la normale'}
+          </T>
+        </Tile>
+      ) : null}
       <Tile
         title="Précipitations"
         metric="rain"
