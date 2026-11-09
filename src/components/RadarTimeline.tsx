@@ -1,5 +1,6 @@
 // Frise de lecture de la carte (lecture / pause, 3 h – 12 h, piste horaire), en natif
 // pour profiter du vrai « Liquid Glass » d'iOS 26 au-dessus de la carte (WebView).
+import { hourOf, timeOf as fmtTime } from '../lib/format';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import { tap, tick } from '../lib/hig';
@@ -39,9 +40,8 @@ const NEAR = 450; // à moins de 7 min 30 de l'heure actuelle, on parle de « ma
 const JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-const pad = (n: number) => (n < 10 ? '0' : '') + n;
-const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const timeOf = (t: number) => hm(new Date(Math.round(t / 60) * 60000));
+// heure au format du téléphone (24 h ou AM/PM)
+const timeAt = (t: number) => fmtTime(new Date(Math.round(t / 60) * 60000));
 
 function heading(layer: MapLayer, pos: TimelinePos | null) {
   if (!pos) return { title: 'Chargement…', sub: '' };
@@ -52,7 +52,7 @@ function heading(layer: MapLayer, pos: TimelinePos | null) {
   // Près de « maintenant » : la date complète. Sinon l'heure EN PREMIER (avec une date courte),
   // pour qu'elle ne soit jamais coupée par le sélecteur 3 h / 12 h.
   if (Math.abs(pos.t - now) <= NEAR) return { title, sub: `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}` };
-  return { title, sub: `${timeOf(pos.t)} · ${JOURS[d.getDay()].toLowerCase()} ${d.getDate()} ${MOIS_COURT[d.getMonth()]}` };
+  return { title, sub: `${timeAt(pos.t)} · ${JOURS[d.getDay()].toLowerCase()} ${d.getDate()} ${MOIS_COURT[d.getMonth()]}` };
 }
 
 export function RadarTimeline({ dark, layer, meta, pos, bottom, onPlay, onMode, onSeek }: Props) {
@@ -89,7 +89,7 @@ export function RadarTimeline({ dark, layer, meta, pos, bottom, onPlay, onMode, 
       const x = place(t.f * w);
       if (labels.some((l) => Math.abs(l.x - x) < LABEL_W * 0.95)) continue;
       const d = new Date(t.t * 1000);
-      labels.push({ key: String(t.t), text: meta.mode === '12h' ? `${d.getHours()} h` : hm(d), x, now: false });
+      labels.push({ key: String(t.t), text: meta.mode === '12h' ? hourOf(d) : fmtTime(d), x, now: false });
     }
   }
 
@@ -152,7 +152,7 @@ export function RadarTimeline({ dark, layer, meta, pos, bottom, onPlay, onMode, 
         {/* Pendant le glissement du doigt : l'heure exacte suit le doigt, au-dessus de la piste */}
         {drag != null && pos && w ? (
           <View pointerEvents="none" style={[styles.bubble, { left: 18 + Math.max(0, Math.min(w - BUBBLE_W, drag * w - BUBBLE_W / 2)), backgroundColor: c.text }]}>
-            <Text style={[styles.bubbleText, { color: dark ? '#000' : '#FFF' }]}>{timeOf(pos.t)}</Text>
+            <Text style={[styles.bubbleText, { color: dark ? '#000' : '#FFF' }]}>{timeAt(pos.t)}</Text>
           </View>
         ) : null}
         <View

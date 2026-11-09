@@ -1,6 +1,7 @@
 // Graphique sur 24 h (courbe ou barres) en SVG.
 // - Heures passées en pointillés et plus pâles, avenir en trait plein.
 // - On pose le doigt et on glisse pour lire la valeur heure par heure.
+import { hour, time } from '../lib/format';
 import { useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
@@ -94,10 +95,7 @@ export function Chart({ width, height = 220, dayStart, series, bars, barColor = 
 
   const main = series[0]?.values ?? bars ?? [];
   const scrubVal = scrub === null ? NaN : bars && !series.length ? bars.find((b) => scrub >= b.t && scrub < b.t + 3600)?.v ?? NaN : interp(main, scrub);
-  const hh = (t: number) => {
-    const d = new Date(t * 1000);
-    return `${d.getHours()} h ${String(d.getMinutes()).padStart(2, '0')}`;
-  };
+  const hh = (t: number) => time(t);
 
   return (
     <View>
@@ -142,7 +140,7 @@ export function Chart({ width, height = 220, dayStart, series, bars, barColor = 
           ))}
           {[0, 6, 12, 18].map((hr) => (
             <SvgText key={`t${hr}`} x={x(dayStart + hr * 3600) + 3} y={height - 4} fill="rgba(255,255,255,0.6)" fontSize={11}>
-              {`${hr} h`}
+              {hour(dayStart + hr * 3600)}
             </SvgText>
           ))}
 

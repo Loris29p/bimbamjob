@@ -43,7 +43,8 @@
           "locationWhenInUsePermission": "Ta position sert à afficher la météo et la pluie là où tu es."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-localization"
     ],
     "scheme": "meteopluie",
     "owner": "loris29p",

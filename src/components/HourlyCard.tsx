@@ -1,18 +1,17 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { upcomingHours, upcomingMinutely, type DayPoint, type HourPoint, type Minutely } from '../lib/forecast';
+import { useContext } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { upcomingHours, type DayPoint, type HourPoint } from '../lib/forecast';
 import { hour, temp, time } from '../lib/format';
-
-const SUBTITLE: Record<Mode, string> = { temp: 'Température (°C)', rain: 'Précipitations (mm)', wind: 'Vent (km/h)' };
-// bleu des probabilités de pluie (iOS)
-const PROB = '#5AC8FA';
 import { symbolFor } from '../lib/sky';
 import { windDirection } from '../lib/weatherCodes';
 import { tick } from '../lib/hig';
-import { DIM, Glass, Icon, RAIN_BLUE, T } from './ui';
+import { DIM, Glass, Icon, PinContext, RAIN_BLUE, T } from './ui';
 
 export type Mode = 'temp' | 'rain' | 'wind';
+const SUBTITLE: Record<Mode, string> = { temp: 'Température (°C)', rain: 'Précipitations (mm)', wind: 'Vent (km/h)' };
+// bleu des probabilités de pluie (iOS)
+const PROB = '#5AC8FA';
 type Item = { kind: 'hour'; h: HourPoint; first: boolean } | { kind: 'sun'; time: number; rise: boolean };
 
 const MODES: { id: Mode; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
@@ -21,9 +20,12 @@ const MODES: { id: Mode; label: string; icon: Parameters<typeof Icon>[0]['name']
   { id: 'wind', label: 'Vent', icon: { ios: 'wind', android: 'air' } },
 ];
 
-export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: { hourly: HourPoint[]; daily: DayPoint[]; minutely: Minutely; mode: Mode; onMode: (m: Mode) => void }) {
-  const [quarter, setQuarter] = useState(false);
-  const quarters = upcomingMinutely(minutely).filter((q) => q.temperature !== null || q.windSpeed !== null);
+export function HourlyCard({ hourly, daily, mode, onMode: setMode }: { hourly: HourPoint[]; daily: DayPoint[]; mode: Mode; onMode: (m: Mode) => void }) {
+  // Comme dans Météo : « Conditions météo » en haut de page, puis « PRÉVISIONS HEURE PAR HEURE »
+  // une fois l'en-tête de la ville replié.
+  const pin = useContext(PinContext);
+  const caps = pin ? pin.scrollY.interpolate({ inputRange: [90, 140], outputRange: [0, 1], extrapolate: 'clamp' }) : null;
+  const full = caps ? caps.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) : 1;
   const hours = upcomingHours(hourly).slice(0, 25);
   if (!hours.length) return null;
   const start = hours[0].time;
@@ -43,9 +45,19 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
   return (
     <Glass>
       <View style={styles.top}>
-        <Pressable style={{ flex: 1 }} onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
-          <T style={styles.title}>Conditions météo</T>
-          <T style={styles.subtitle}>{quarter ? 'Toutes les 15 min (AROME)' : SUBTITLE[mode]}</T>
+        <Pressable style={styles.heading} onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
+          <Animated.View style={{ opacity: full }}>
+            <T style={styles.title}>Conditions météo</T>
+            <T style={styles.subtitle}>{SUBTITLE[mode]}</T>
+          </Animated.View>
+          {caps ? (
+            <Animated.View style={[styles.capsRow, { opacity: caps }]}>
+              <Icon name={{ ios: 'clock', android: 'schedule' }} size={13} color={DIM} />
+              <T style={styles.caps} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                PRÉVISIONS HEURE PAR HEURE
+              </T>
+            </Animated.View>
+          ) : null}
         </Pressable>
         <View style={styles.modes}>
           {MODES.map((m, i) => {
@@ -62,15 +74,14 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
           })}
         </View>
       </View>
-      {quarter && quarters.length ? (
-        <QuarterStrip quarters={quarters} mode={mode} />
-      ) : (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
         {items.map((it) => {
           if (it.kind === 'sun') {
             return (
               <View key={`sun${it.time}`} style={styles.col}>
-                <T style={styles.hour}>{time(it.time)}</T>
+                <T style={styles.hour} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {time(it.time)}
+                </T>
                 <View style={styles.iconBox}>
                   <Icon name={it.rise ? { ios: 'sunrise.fill', android: 'wb_twilight' } : { ios: 'sunset.fill', android: 'wb_twilight' }} size={26} multicolor />
                 </View>
@@ -81,7 +92,9 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
           const h = it.h;
           return (
             <View key={h.time} style={styles.col}>
-              <T style={styles.hour}>{it.first ? 'Maint.' : hour(h.time)}</T>
+              <T style={styles.hour} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                {it.first ? 'Maint.' : hour(h.time)}
+              </T>
               {mode === 'temp' ? (
                 <>
                   <View style={styles.iconBox}>
@@ -115,75 +128,22 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
           );
         })}
       </ScrollView>
-      )}
-      {quarters.length ? (
-        <View style={styles.bottom}>
-          <Pressable onPress={() => { tick(); setQuarter((q) => !q); }} style={[styles.chip, quarter && styles.modeOn]} hitSlop={6}>
-            <T style={{ fontSize: 12, fontWeight: '700' }}>15 min</T>
-          </Pressable>
-        </View>
-      ) : null}
     </Glass>
   );
 }
 
-function QuarterStrip({ quarters, mode }: { quarters: Minutely; mode: Mode }) {
-  const maxRain = Math.max(0.25, ...quarters.map((q) => q.precipitation));
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
-      {quarters.map((q, i) => (
-        <View key={q.time} style={styles.col}>
-          <T style={styles.hour}>{i === 0 ? 'Maint.' : time(q.time)}</T>
-          {mode === 'wind' ? (
-            <>
-              <View style={styles.iconBox}>
-                {q.windDirection !== null ? (
-                  <View style={{ transform: [{ rotate: `${q.windDirection + 180}deg` }] }}>
-                    <Icon name={{ ios: 'location.north.fill', android: 'navigation' }} size={18} />
-                  </View>
-                ) : null}
-                {q.windDirection !== null ? <T style={styles.small}>{windDirection(q.windDirection)}</T> : null}
-              </View>
-              <T style={styles.value}>{q.windSpeed !== null ? Math.round(q.windSpeed) : '–'}</T>
-              <T style={styles.small}>{q.windGusts !== null ? `raf. ${Math.round(q.windGusts)}` : ' '}</T>
-            </>
-          ) : mode === 'rain' ? (
-            <>
-              <View style={[styles.iconBox, { justifyContent: 'flex-end' }]}>
-                <View style={[styles.rainBar, { height: Math.max(2, (q.precipitation / maxRain) * 44), opacity: q.precipitation > 0 ? 1 : 0.25 }]} />
-              </View>
-              <T style={styles.value}>{q.precipitation >= 0.05 ? q.precipitation.toFixed(1) : '0'}</T>
-              <T style={styles.small}>mm</T>
-            </>
-          ) : (
-            <>
-              <View style={styles.iconBox}>
-                {q.weatherCode !== null ? (
-                  <Icon name={symbolFor(q.weatherCode, q.isDay)} size={26} multicolor />
-                ) : q.precipitation >= 0.05 ? (
-                  <Icon name={{ ios: 'cloud.rain.fill', android: 'rainy' }} size={24} multicolor />
-                ) : null}
-              </View>
-              <T style={styles.value}>{q.temperature !== null ? `${q.temperature.toFixed(1)}°` : '–'}</T>
-            </>
-          )}
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
 const styles = StyleSheet.create({
-  bottom: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
-  chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.18)' },
   top: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  heading: { flex: 1, justifyContent: 'center' },
+  capsRow: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  caps: { flex: 1, fontSize: 13, fontWeight: '600', color: DIM },
   title: { fontSize: 17, fontWeight: '600', letterSpacing: -0.4 },
   subtitle: { fontSize: 14, color: DIM, marginTop: 1 },
   modes: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.16)', borderRadius: 20, padding: 3 },
   modeWrap: { flexDirection: 'row', alignItems: 'center' },
   modeSep: { width: StyleSheet.hairlineWidth, height: 18, backgroundColor: 'rgba(255,255,255,0.35)' },
-  mode: { width: 40, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  modeOn: { width: 48, backgroundColor: 'rgba(255,255,255,0.2)' },
+  mode: { width: 36, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  modeOn: { width: 46, backgroundColor: 'rgba(255,255,255,0.2)' },
   col: { width: 52, alignItems: 'center' },
   hour: { fontSize: 16, fontWeight: '600', letterSpacing: -0.3 },
   iconBox: { height: 58, alignItems: 'center', justifyContent: 'center' },
