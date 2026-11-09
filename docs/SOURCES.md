@@ -11,7 +11,8 @@ Principe : **mesurer quand on peut, prévoir avec le modèle le plus fin possibl
 | **De J+5 à J+14** | **ECMWF IFS** (centre européen) | ~9 km | Le modèle mondial le plus fiable à moyen terme. Affiché comme une **tendance**. |
 | **Vigilances** (orages, vent, pluie-inondation, canicule…) | **Météo-France**, API officielle « Données Publiques Vigilance » | Département | Source officielle, la même que vigilance.meteofrance.fr. |
 | **Qualité de l'air** | **Copernicus CAMS Europe** (via Open-Meteo) | ~10 km | Modèle européen de référence, indice européen (EAQI). |
-| **Radar de pluie** | RainViewer (mosaïque des radars, dont ceux de Météo-France) | Images toutes les 10 min | Gratuit et simple à afficher. Le radar officiel Météo-France est disponible via l'API « Paquet Radar », mais en fichiers bruts lourds à traiter sur un téléphone (évolution possible). |
+| **Carte de pluie – passé** | RainViewer (mosaïque des radars, dont ceux de Météo-France) | Images toutes les 10 min, 2 h en arrière | Gratuit et simple à afficher. Le radar officiel Météo-France existe via l'API « Paquet Radar », mais en fichiers bruts lourds pour un téléphone. |
+| **Carte de pluie – futur** | **AROME** (Météo-France) calculé sur une grille de 13 × 13 points autour de toi (via Open-Meteo), puis dessiné en couleurs | Quart d'heure sur 3 h, heure par heure sur 12 h | Prévision officielle la plus fine. Chaque ouverture de la carte compte pour ~170 appels Open-Meteo (gratuit jusqu'à 10 000/jour). |
 | **Communes, position** | Base Adresse Nationale (adresse.data.gouv.fr) | — | Service officiel de l'État. |
 
 ## Ce qui demande une clé Météo-France (gratuite)
