@@ -29,21 +29,6 @@ export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top
   #layers button.on{background:rgba(127,127,127,.25);font-weight:700}
   .temp small{font-size:9px;margin-left:1px;opacity:.8}
   #side button{width:46px;height:46px;border:0;background:none;font-size:20px;color:${text}}
-  #panel{position:absolute;left:12px;right:12px;bottom:${insets.bottom + 10}px;z-index:1000;padding:12px 14px}
-  #top{display:flex;align-items:center;gap:10px}
-  #play{width:42px;height:42px;border-radius:21px;border:0;background:rgba(127,127,127,.22);color:${text};font-size:16px}
-  #title{font-weight:700;font-size:16px}
-  #time{color:${sub};font-size:13px}
-  #modes{margin-left:auto;display:flex;background:rgba(127,127,127,.2);border-radius:16px;padding:2px}
-  #modes button{border:0;background:none;color:${text};font-weight:600;padding:6px 12px;border-radius:14px;font-size:14px}
-  #modes button.on{background:${dark ? 'rgba(255,255,255,.25)' : '#fff'}}
-  #track{position:relative;height:28px;margin-top:10px}
-  #slider{width:100%;margin:0;touch-action:none}
-  #ticks{display:flex;justify-content:space-between;color:${sub};font-size:12px;margin-top:2px}
-  #grads{position:absolute;left:8px;right:8px;top:9px;height:10px;pointer-events:none}
-  #grads i{position:absolute;top:0;width:1.5px;height:10px;border-radius:1px;background:${sub};opacity:.6}
-  #ticks .now{font-weight:700;color:${text}}
-  #now{position:absolute;top:-2px;width:2px;height:14px;background:${text};border-radius:1px}
   #msg{position:absolute;top:${insets.top + 8}px;left:64px;right:76px;z-index:1000;text-align:center;font-size:13px;padding:6px 10px;display:none}
   .temp{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:17px;background:rgba(70,80,95,.85);color:#fff;font-weight:700;font-size:14px;border:1.5px solid rgba(255,255,255,.7)}
   .me{display:flex;flex-direction:column;align-items:center}
@@ -58,12 +43,6 @@ export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top
 <div id="legend" class="glass"><b>Précipitations</b><div class="row"><div class="bar"></div><div class="labels"><span>Très fortes</span><span>Fortes</span><span>Modérées</span><span>Faibles</span></div></div></div>
 <div id="side" class="glass"><button id="layersBtn" aria-label="Calques">◧</button><button id="locate" aria-label="Ma position">➤</button></div>
 <div id="layers" class="glass"><button data-l="rain" class="on">Précipitations</button><button data-l="temp">Température</button><button data-l="wind">Vent</button><button data-l="air">Qualité de l’air</button></div>
-<div id="panel" class="glass">
-  <div id="top"><button id="play">▶</button><div><div id="title">Chargement…</div><div id="time"></div></div>
-    <div id="modes"><button data-m="3h" class="on">3 h</button><button data-m="12h">12 h</button></div></div>
-  <div id="track"><div id="grads"></div><input id="slider" type="range" min="0" max="0" value="0"><div id="now"></div></div>
-  <div id="ticks"></div>
-</div>
 <script>
 var LAT=${lat}, LON=${lon};
 var map=L.map('map',{zoomControl:false,attributionControl:true}).setView([LAT,LON],9);
@@ -85,6 +64,15 @@ function makeGrid(b){ // b : L.LatLngBounds de la vue
 }
 makeGrid(map.getBounds());
 
+// La frise de lecture est dessinée par l'app (Liquid Glass natif) : on lui envoie l'état.
+function post(o){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(o))}
+var lastPost=0,lastText='',titleText='Chargement…',subText='';
+function postPos(force){
+  var n=frames[mode].length,f=n>1?pos/(n-1):0,txt=titleText+'|'+subText+'|'+!!raf,ts=Date.now();
+  if(!force&&txt===lastText&&ts-lastPost<33)return;lastPost=ts;lastText=txt;
+  post({type:'pos',f:Math.max(0,Math.min(1,f)),title:titleText,sub:subText,playing:!!raf});
+}
+var JOURS=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 function pad(n){return(n<10?'0':'')+n}
 function hm(t){var d=new Date(t*1000);return pad(d.getHours())+':'+pad(d.getMinutes())}
 function hh(t){return new Date(t*1000).getHours()+' h'}
@@ -250,24 +238,23 @@ function show(p){
   }
   var t=b?a.t+(b.t-a.t)*k:a.t,cur=k<0.5||!b?a:b;
   showTemps(t);
-  document.getElementById('slider').value=Math.round(pos*STEPS);
-  document.getElementById('title').textContent=layer==='temp'?'Température':layer==='wind'?'Vent':layer==='air'?'Qualité de l’air (CAMS)':cur.kind==='radar'?'Radar (observé)':'Prévision AROME';
-  var d=new Date(t*1000),days=['Dim.','Lun.','Mar.','Mer.','Jeu.','Ven.','Sam.'];
-  document.getElementById('time').textContent=days[d.getDay()]+' '+hm(Math.round(t/60)*60)+(layer==='rain'&&cur.empty?' · pas de pluie':'');
+  titleText=layer==='temp'?'Température':layer==='wind'?'Vent':layer==='air'?'Qualité de l’air (CAMS)':cur.kind==='radar'?'Radar (observé)':'Prévision AROME';
+  var d=new Date(t*1000);
+  subText=JOURS[d.getDay()]+' '+d.getDate()+' '+MOIS[d.getMonth()]+' · '+hm(Math.round(t/60)*60)+(layer==='rain'&&cur.empty?' · pas de pluie':'');
+  postPos(false);
 }
 function setMode(m){
-  mode=m;stop();lastKey='';document.querySelectorAll('#modes button').forEach(function(b){b.className=b.dataset.m===m?'on':''});
-  var list=frames[m],s=document.getElementById('slider');s.max=Math.max(0,(list.length-1)*STEPS);
+  mode=m;stop();lastKey='';
+  var list=frames[m],last=Math.max(1,list.length-1);
   var now=Date.now()/1000,ni=0;list.forEach(function(f,k){if(f.t<=now+60)ni=k});
-  var ticks=document.getElementById('ticks');ticks.innerHTML='';
-  var n=5;for(var k=0;k<n;k++){var f=list[Math.round(k*(list.length-1)/(n-1))];if(!f)continue;var sp=document.createElement('span');var isNow=Math.abs(f.t-now)<450;sp.textContent=isNow?'Maint.':(m==='12h'?hh(f.t):hm(f.t));if(isNow)sp.className='now';ticks.appendChild(sp)}
+  var ticks=[],n=5;for(var k=0;k<n;k++){var idx=Math.round(k*(list.length-1)/(n-1)),f=list[idx];if(!f)continue;var isNow=Math.abs(f.t-now)<450;ticks.push({l:isNow?'Maint.':(m==='12h'?hh(f.t):hm(f.t)),f:idx/last,now:isNow})}
   // une graduation par heure pleine sur la piste
-  var grads=document.getElementById('grads');grads.innerHTML='';
-  if(list.length>1){var t0=list[0].t,t1=list[list.length-1].t;for(var h=Math.ceil(t0/3600)*3600;h<=t1;h+=3600){var g=document.createElement('i');g.style.left=((h-t0)/(t1-t0)*100)+'%';grads.appendChild(g)}}
-  document.getElementById('now').style.left=(list.length>1?ni/(list.length-1)*100:0)+'%';
-  show(ni);
+  var grads=[];
+  if(list.length>1){var t0=list[0].t,t1=list[list.length-1].t;for(var h=Math.ceil(t0/3600)*3600;h<=t1;h+=3600)grads.push((h-t0)/(t1-t0))}
+  post({type:'meta',mode:m,showModes:layer==='rain'&&frames['3h'].length>0&&frames['12h'].length>0,ticks:ticks,grads:grads});
+  show(ni);postPos(true);
 }
-function stop(){if(raf){cancelAnimationFrame(raf);raf=null}document.getElementById('play').textContent='▶'}
+function stop(){if(raf){cancelAnimationFrame(raf);raf=null;postPos(true)}}
 function tick(ts){
   var n=frames[mode].length;if(n<2)return stop();
   var dt=lastTs?Math.min(0.1,(ts-lastTs)/1000):0;lastTs=ts;
@@ -275,16 +262,16 @@ function tick(ts){
   var p=pos+dt*speed;if(p>n-1+0.6)p=0; // courte pause sur la dernière image, puis on recommence
   show(Math.min(p,n-1));pos=p;raf=requestAnimationFrame(tick);
 }
-document.getElementById('play').onclick=function(){
-  if(raf)return stop();document.getElementById('play').textContent='❚❚';
-  if(pos>=frames[mode].length-1)pos=0;lastTs=0;raf=requestAnimationFrame(tick);
-};
-document.getElementById('slider').oninput=function(e){stop();show(+e.target.value/STEPS)};
-document.querySelectorAll('#modes button').forEach(function(b){b.onclick=function(){setMode(b.dataset.m)}});
+function togglePlay(){
+  if(raf)return stop();if(frames[mode].length<2)return;
+  if(pos>=frames[mode].length-1)pos=0;lastTs=0;raf=requestAnimationFrame(tick);postPos(true);
+}
+// commandes envoyées par l'app (frise native)
+window.rn={play:togglePlay,mode:function(m){if(frames[m]&&frames[m].length)setMode(m)},seek:function(f){stop();show(f*(frames[mode].length-1));postPos(true)}};
 function setLayer(l){
   layer=l;lastKey='';tempKey='';document.getElementById('layers').style.display='none';
   document.querySelectorAll('#layers button').forEach(function(b){b.className=b.dataset.l===l?'on':''});
-  setLegend(l);document.getElementById('modes').style.display=l==='rain'?'flex':'none';
+  setLegend(l);
   if(l==='air'&&!hourlyAir){loadAir().then(function(){if(layer==='air'){lastKey='';tempKey='';show(pos)}})}
   setMode(l==='rain'?mode:'12h');
 }
@@ -341,7 +328,7 @@ var radar=fetch('https://api.rainviewer.com/public/weather-maps.json').then(func
 Promise.all([forecast,radar]).then(function(res){
   var fc=res[0],past=res[1];pastFrames=past;
   applyForecast(fc);
-  if(!frames['3h'].length&&!frames['12h'].length){msg('Carte indisponible pour le moment');document.getElementById('title').textContent='Indisponible';return}
+  if(!frames['3h'].length&&!frames['12h'].length){msg('Carte indisponible pour le moment');titleText='Indisponible';subText='';postPos(true);return}
   if(!fc)msg('Prévision indisponible : radar seulement');else if(!past.length)msg('Radar indisponible : prévision seulement');
   if(past.length){field=new RadarField({opacity:0,maxZoom:12,zIndex:10,className:'radar',updateWhenZooming:false}).addTo(map);map.on('moveend',preloadRadar);setTimeout(preloadRadar,50)}
   setMode(frames['3h'].length?'3h':'12h');
