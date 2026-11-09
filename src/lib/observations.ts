@@ -106,7 +106,11 @@ export async function fetchNearestObservation(place: Place, placeAltitude?: numb
       }
     }),
   );
-  const ok = results.filter((r): r is NonNullable<typeof r> => r !== null);
+  const now = Date.now() / 1000;
+  const ok = results
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    // d'abord les mesures de moins de 30 min, puis la plus proche
+    .sort((a, b) => Number(now - a.time > 1800) - Number(now - b.time > 1800) || a.d - b.d);
   if (!ok.length) return null;
 
   const pickField = (key: string, convert: (v: number) => number = (v) => v): Measured | null => {

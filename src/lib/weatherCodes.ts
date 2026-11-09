@@ -44,6 +44,12 @@ export function windDirection(deg: number) {
   return DIRS[Math.round(deg / 22.5) % 16];
 }
 
+/** « du N », « de l'E »… */
+export function windFrom(deg: number) {
+  const d = windDirection(deg);
+  return /^[EO]/.test(d) ? `de l'${d}` : `du ${d}`;
+}
+
 /** Intensité de pluie (mm sur 15 min) → niveau 0 à 3. */
 export function rainLevel(mmPer15: number): 0 | 1 | 2 | 3 {
   const mmh = mmPer15 * 4;

@@ -33,7 +33,7 @@ export async function searchCities(query: string): Promise<(Place & { label: str
 
 export async function reverseGeocode(latitude: number, longitude: number): Promise<Place> {
   try {
-    const res = await fetch(`${BASE}/reverse/?lon=${longitude}&lat=${latitude}&type=municipality`);
+    const res = await fetch(`${BASE}/reverse/?lon=${longitude}&lat=${latitude}`);
     const json = await res.json();
     const f = (json.features as Feature[])[0];
     if (f) return { ...toPlace(f), latitude, longitude };

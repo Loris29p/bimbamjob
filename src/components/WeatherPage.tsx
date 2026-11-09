@@ -63,7 +63,7 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={[styles.header, { opacity: bigOpacity, transform: [{ translateY: headerShift }] }]}>
-          {place.isGps ? <T style={styles.myPos}>MA POSITION</T> : null}
+          {place.isGps && place.name !== 'Ma position' ? <T style={styles.myPos}>MA POSITION</T> : null}
           <T style={styles.city} numberOfLines={1}>
             {place.name}
           </T>
@@ -98,7 +98,7 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
             </Pressable>
             {obs ? <ObservationCard obs={obs} /> : null}
             <AirCard place={place} />
-            <Tiles forecast={forecast} />
+            <Tiles forecast={forecast} obs={useObs ? obs : null} />
             <MoonCard />
             <T style={styles.source}>
               Prévisions : AROME et ARPEGE (Météo-France) · Mesures : stations Météo-France · Mise à jour {time(forecast.fetchedAt / 1000)}

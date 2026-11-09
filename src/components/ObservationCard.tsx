@@ -1,7 +1,7 @@
 // Mesures réelles de la station Météo-France la plus proche.
 import { StyleSheet, View } from 'react-native';
 import type { Observation } from '../lib/observations';
-import { windDirection } from '../lib/weatherCodes';
+import { windFrom } from '../lib/weatherCodes';
 import { DIM, Glass, LINE, T } from './ui';
 
 export function ago(unix: number) {
@@ -17,7 +17,7 @@ export function ObservationCard({ obs }: { obs: Observation }) {
   if (obs.temperature !== null) rows.push(['Température', `${obs.temperature.toFixed(1)}°`]);
   if (obs.humidity !== null) rows.push(['Humidité', `${Math.round(obs.humidity)} %`]);
   if (obs.windSpeed !== null)
-    rows.push(['Vent', `${Math.round(obs.windSpeed)} km/h${obs.windDirection !== null ? ` du ${windDirection(obs.windDirection)}` : ''}`]);
+    rows.push(['Vent', `${Math.round(obs.windSpeed)} km/h${obs.windDirection !== null ? ` ${windFrom(obs.windDirection)}` : ''}`]);
   if (obs.windGusts !== null) rows.push(['Rafales', `${Math.round(obs.windGusts)} km/h`]);
   if (obs.rain6min !== null) rows.push(['Pluie (6 dernières min)', `${obs.rain6min.toFixed(1)} mm`]);
   if (obs.pressure !== null) rows.push(['Pression', `${Math.round(obs.pressure)} hPa`]);

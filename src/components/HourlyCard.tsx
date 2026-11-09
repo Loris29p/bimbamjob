@@ -20,7 +20,12 @@ function summary(hours: HourPoint[]) {
     const stop = next.findIndex((h) => !isRainy(h.weatherCode) && h.precipitation < 0.1);
     parts.push(stop > 0 ? `Pluie jusqu'à ${hour(next[stop].time)} environ.` : 'Temps pluvieux ces prochaines heures.');
   } else if (rainIdx > 0) {
-    parts.push(`${weatherLabel(next[rainIdx].weatherCode)} attendue vers ${hour(next[rainIdx].time)}.`);
+    const h = next[rainIdx];
+    parts.push(
+      isRainy(h.weatherCode)
+        ? `${weatherLabel(h.weatherCode)} vers ${hour(h.time)}.`
+        : `Risque de pluie de ${Math.round((h.precipitationProbability ?? 0) / 10) * 10} % vers ${hour(h.time)}.`,
+    );
   } else {
     parts.push(`${weatherLabel(next[Math.min(2, next.length - 1)].weatherCode, next[0].isDay)} pour les prochaines heures, sans pluie prévue.`);
   }

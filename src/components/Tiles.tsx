@@ -7,7 +7,8 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import type { MetricId } from '../lib/metrics';
 import { upcomingHours, type Forecast } from '../lib/forecast';
 import { temp, time } from '../lib/format';
-import { uvLabel, windDirection } from '../lib/weatherCodes';
+import type { Observation } from '../lib/observations';
+import { uvLabel, windFrom } from '../lib/weatherCodes';
 import { DIM, Glass, T, WHITE } from './ui';
 
 function Tile({ title, icon, value, unit, children, note, metric, wide }: { title: string; icon: SymbolViewProps['name']; value: string; unit?: string; children?: ReactNode; note?: string; metric?: MetricId; wide?: boolean }) {
@@ -78,8 +79,18 @@ function Scale({ ratio, colors }: { ratio: number; colors: string[] }) {
   );
 }
 
-export function Tiles({ forecast }: { forecast: Forecast }) {
-  const c = forecast.current;
+export function Tiles({ forecast, obs }: { forecast: Forecast; obs: Observation | null }) {
+  const model = forecast.current;
+  // Les mesures des stations remplacent la prévision quand elles existent.
+  const windMeasured = obs?.windSpeed != null && obs.windDirection != null;
+  const c = {
+    ...model,
+    windSpeed: windMeasured ? obs!.windSpeed! : model.windSpeed,
+    windDirection: windMeasured ? obs!.windDirection! : model.windDirection,
+    windGusts: windMeasured && obs!.windGusts != null ? obs!.windGusts : model.windGusts,
+    humidity: obs?.humidity ?? model.humidity,
+    pressure: obs?.pressure ?? model.pressure,
+  };
   const hours = upcomingHours(forecast.hourly);
   const now = hours[0];
   const today = forecast.daily[0];
@@ -87,7 +98,7 @@ export function Tiles({ forecast }: { forecast: Forecast }) {
   const uv = now?.uv ?? today?.uvMax ?? null;
   const vis = now?.visibility ?? null;
   const p3 = hours[3]?.pressure;
-  const trend = p3 === undefined ? '' : p3 - c.pressure > 0.8 ? 'En hausse' : c.pressure - p3 > 0.8 ? 'En baisse' : 'Stable';
+  const trend = p3 === undefined ? '' : p3 - model.pressure > 0.8 ? 'En hausse' : model.pressure - p3 > 0.8 ? 'En baisse' : 'Stable';
   const rain24 = hours.slice(0, 24).reduce((s, h) => s + h.precipitation, 0);
   const nowSec = Date.now() / 1000;
   const nextSun = today && nowSec < today.sunrise ? { t: today.sunrise, rise: true } : today && nowSec < today.sunset ? { t: today.sunset, rise: false } : tomorrow ? { t: tomorrow.sunrise, rise: true } : null;
@@ -101,7 +112,8 @@ export function Tiles({ forecast }: { forecast: Forecast }) {
           <View>
             <T style={styles.small}>Rafales</T>
             <T style={styles.strong}>{Math.round(c.windGusts)} km/h</T>
-            <T style={styles.small}>Vient du {windDirection(c.windDirection)}</T>
+            <T style={styles.small}>Vient {windFrom(c.windDirection)}</T>
+            {windMeasured ? <T style={styles.small}>Mesuré</T> : null}
           </View>
         </View>
       </Tile>
