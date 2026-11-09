@@ -25,6 +25,8 @@ type Props = {
   /** Instant courant (si la journée affichée est aujourd'hui) */
   now?: number;
   bands?: { from: number; to: number; label: string }[];
+  /** Prévient la page quand le doigt est posé, pour bloquer son défilement. */
+  onScrubbing?: (active: boolean) => void;
 };
 
 const AXIS = 34;
@@ -40,7 +42,7 @@ export function interp(values: { t: number; v: number }[], t: number) {
   return NaN;
 }
 
-export function Chart({ width, height = 220, dayStart, series, bars, barColor = '#5AC8FA', yMin, yMax, yTicks, formatY, formatValue, now, bands }: Props) {
+export function Chart({ width, height = 220, dayStart, series, bars, barColor = '#5AC8FA', yMin, yMax, yTicks, formatY, formatValue, now, bands, onScrubbing }: Props) {
   const w = width - AXIS;
   const h = height - BOTTOM;
   const x = (t: number) => ((t - dayStart) / (24 * 3600)) * w;
@@ -60,6 +62,8 @@ export function Chart({ width, height = 220, dayStart, series, bars, barColor = 
   };
   const setRef = useRef(setScrub);
   setRef.current = setScrub;
+  const busyRef = useRef(onScrubbing);
+  busyRef.current = onScrubbing;
   const toTime = (px: number) => dayStart + Math.max(0, Math.min(1, px / w)) * 86400;
   const xRef = useRef(toTime);
   xRef.current = toTime;
@@ -67,12 +71,23 @@ export function Chart({ width, height = 220, dayStart, series, bars, barColor = 
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
+        onMoveShouldSetPanResponder: () => true,
+        // le doigt reste « à nous » même s'il part vers le haut ou le bas
         onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: (e) => setRef.current(xRef.current(e.nativeEvent.locationX)),
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderGrant: (e) => {
+          busyRef.current?.(true);
+          setRef.current(xRef.current(e.nativeEvent.locationX));
+        },
         onPanResponderMove: (e) => setRef.current(xRef.current(e.nativeEvent.locationX)),
-        onPanResponderRelease: () => setRef.current(null),
-        onPanResponderTerminate: () => setRef.current(null),
+        onPanResponderRelease: () => {
+          busyRef.current?.(false);
+          setRef.current(null);
+        },
+        onPanResponderTerminate: () => {
+          busyRef.current?.(false);
+          setRef.current(null);
+        },
       }),
     [],
   );

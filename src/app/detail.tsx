@@ -29,6 +29,8 @@ export default function Detail() {
   const params = useLocalSearchParams<{ metric?: MetricId }>();
   const [metric, setMetric] = useState<MetricId>(params.metric && METRICS[params.metric] ? params.metric : 'temp');
   const [menu, setMenu] = useState(false);
+  // pendant la lecture au doigt, la page ne défile pas (sinon elle « vole » le geste)
+  const [scrubbing, setScrubbing] = useState(false);
   const m = METRICS[metric];
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -180,7 +182,7 @@ export default function Detail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#1C1C1E' }}>
-    <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: top, paddingBottom: insets.bottom + 30 }}>
+    <ScrollView scrollEnabled={!scrubbing} style={styles.screen} contentContainerStyle={{ paddingTop: top, paddingBottom: insets.bottom + 30 }}>
       <Header title={m.title} icon={m.icon} onTitle={() => setMenu((v) => !v)} />
 
       <View style={styles.days}>
@@ -212,6 +214,7 @@ export default function Detail() {
       {metric === 'rain' ? (
         <>
           <Chart
+            onScrubbing={setScrubbing}
             width={chartW}
             dayStart={dayStart}
             series={[]}
@@ -227,6 +230,7 @@ export default function Detail() {
           />
           <T style={styles.subTitle}>Risque de pluie</T>
           <Chart
+            onScrubbing={setScrubbing}
             width={chartW}
             height={170}
             dayStart={dayStart}
@@ -241,6 +245,7 @@ export default function Detail() {
         </>
       ) : (
         <Chart
+          onScrubbing={setScrubbing}
           width={chartW}
           dayStart={dayStart}
           series={[{ values: main, color: m.color }, ...(alt.length ? [{ values: alt, color: 'rgba(255,255,255,0.7)', dashed: true, fill: false }] : [])]}
