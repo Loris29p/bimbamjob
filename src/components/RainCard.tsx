@@ -43,12 +43,15 @@ export function RainCard({ minutely }: { minutely: Minutely }) {
           );
         })}
       </View>
+      {/* une étiquette par heure (toutes les 4 barres), sur une seule ligne */}
       <View style={styles.axis}>
-        {slots.map((s, i) => (
-          <T key={s.time} style={styles.label}>
-            {i === 0 ? 'Maint.' : i % 4 === 0 ? time(s.time) : ''}
-          </T>
-        ))}
+        {slots
+          .filter((_, i) => i % 4 === 0)
+          .map((s, k) => (
+            <T key={s.time} numberOfLines={1} style={[styles.label, { flex: Math.min(4, slots.length - k * 4) }]}>
+              {k === 0 ? 'Maint.' : time(s.time)}
+            </T>
+          ))}
       </View>
     </Glass>
   );
@@ -61,5 +64,5 @@ const styles = StyleSheet.create({
   col: { flex: 1, height: '100%', justifyContent: 'flex-end' },
   bar: { backgroundColor: RAIN_BLUE, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
   axis: { flexDirection: 'row', gap: 4, marginTop: 4 },
-  label: { flex: 1, fontSize: 11, color: DIM, overflow: 'visible', width: 60 },
+  label: { fontSize: 12, color: DIM },
 });

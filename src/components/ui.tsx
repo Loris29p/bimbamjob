@@ -65,8 +65,9 @@ export function Glass({ title, icon, children, style }: { title?: string; icon?:
         <Animated.View style={[styles.headerWrap, shift ? { transform: [{ translateY: shift }] } : null]}>
           {plate ? (
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: plate }]}>
-              {Platform.OS === 'ios' ? <BlurView intensity={80} tint="systemThinMaterialDark" style={StyleSheet.absoluteFill} /> : null}
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(40,52,70,0.35)' }]} />
+              {/* même matériau que la carte : le titre collé ne forme pas de bandeau sombre */}
+              {Platform.OS === 'ios' ? <BlurView intensity={60} tint="systemUltraThinMaterialDark" style={StyleSheet.absoluteFill} /> : null}
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.04)' : 'rgba(10,20,40,0.3)' }]} />
             </Animated.View>
           ) : null}
           <View style={styles.header}>

@@ -84,12 +84,13 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
       <Animated.ScrollView
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: bottomInset + 24, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingBottom: bottomInset + 24, paddingHorizontal: 16 }}
         refreshControl={<RefreshControl refreshing={loading && !!forecast} onRefresh={refresh} tintColor="#fff" />}
         showsVerticalScrollIndicator={false}
       >
         <PinContext.Provider value={pin}>
-        <View ref={contentRef} collapsable={false}>
+        {/* la marge du haut est DANS la vue mesurée, pour que la position des cartes soit exacte */}
+        <View ref={contentRef} collapsable={false} style={{ paddingTop: insets.top + 24 }}>
         <Animated.View style={[styles.header, { opacity: bigOpacity, transform: [{ translateY: headerShift }] }]}>
           {place.isGps && place.name !== 'Ma position' ? <T style={styles.myPos}>MA POSITION</T> : null}
           <T style={styles.city} numberOfLines={1}>
