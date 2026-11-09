@@ -1,5 +1,6 @@
 // Détail d'un indicateur : choix du jour, graphique sur 24 h, synthèse.
 import { router, useLocalSearchParams } from 'expo-router';
+import { Fragment } from 'react';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,8 +25,10 @@ function niceRange(vals: number[], pad: number, step: number): [number, number] 
 }
 
 export default function Detail() {
-  const { metric = 'temp' } = useLocalSearchParams<{ metric?: MetricId }>();
-  const m = METRICS[metric] ?? METRICS.temp;
+  const params = useLocalSearchParams<{ metric?: MetricId }>();
+  const [metric, setMetric] = useState<MetricId>(params.metric && METRICS[params.metric] ? params.metric : 'temp');
+  const [menu, setMenu] = useState(false);
+  const m = METRICS[metric];
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { places, activeIndex } = usePlaces();
@@ -47,7 +50,8 @@ export default function Detail() {
   if (!forecast || !day || main.length < 2) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
-        <Header title={m.title} icon={m.icon} />
+        <Header title={m.title} icon={m.icon} onTitle={() => setMenu((v) => !v)} />
+        {menu ? <MetricMenu current={metric} onPick={(id) => { setMetric(id); setMenu(false); }} /> : null}
         <T style={{ color: DIM, marginTop: 20 }}>Données indisponibles pour cet indicateur.</T>
       </View>
     );
@@ -99,12 +103,60 @@ export default function Detail() {
     }
   }
 
+  // Cumuls de pluie autour de maintenant
+  const sumRain = (from: number, to: number) => forecast.hourly.filter((h) => h.time >= from && h.time < to).reduce((acc, h) => acc + h.precipitation, 0);
+  const rainPast24 = sumRain(nowSec - 86400, nowSec);
+  const rainNext24 = sumRain(nowSec, nowSec + 86400);
+  const mmText = (mm: number) => (mm < 0.1 ? '0 mm' : mm < 1 ? '< 1 mm' : `${Math.round(mm)} mm`);
+
+  // Barres de comparaison aujourd'hui / hier
+  let comparison: { label: string; value: string; ratio: number; today: boolean }[] | null = null;
+  if (isToday && y) {
+    const pair = (a: number | null, b: number | null, f: (v: number) => string) => {
+      if (a === null || b === null) return null;
+      const max = Math.max(a, b, 1e-6);
+      return [
+        { label: 'Aujourd’hui', value: f(a), ratio: a / max, today: true },
+        { label: 'Hier', value: f(b), ratio: b / max, today: false },
+      ];
+    };
+    if (metric === 'temp') comparison = pair(day.tMax, y.tMax, (v) => `max. ${temp(v)}`);
+    else if (metric === 'uv') comparison = pair(day.uvMax, y.uvMax, (v) => `${Math.round(v)}`);
+    else if (metric === 'wind') comparison = pair(day.windGustsMax, y.windGustsMax, (v) => `${Math.round(v)} km/h`);
+    else if (metric === 'rain') comparison = pair(day.precipitationSum, y.precipitationSum, (v) => mmText(v));
+  }
+
+  // Phrase de synthèse de la journée
+  let summary = '';
+  const span = `entre ${fmt(loP.v)} et ${fmt(hiP.v)}`;
+  if (metric === 'temp') {
+    const feels = hours.map((h) => h.apparent);
+    summary = `${isToday && Number.isFinite(nowVal) ? `Il fait ${fmt(nowVal)} en ce moment. ` : ''}Températures ${span} sur la journée, ressenti entre ${temp(Math.min(...feels))} et ${temp(Math.max(...feels))}. Le plus chaud vers ${hour(hiP.t)}.`;
+  } else if (metric === 'wind') {
+    const gusts = Math.max(...hours.map((h) => h.windGusts));
+    summary = `${isToday && Number.isFinite(nowVal) ? `Vent de ${fmt(nowVal)} en ce moment. ` : ''}Vent moyen ${span}, rafales jusqu’à ${Math.round(gusts)} km/h${gusts >= 60 ? ' : prudence' : ''}.`;
+  } else if (metric === 'rain') {
+    const wet = hours.filter((h) => h.precipitation >= 0.1);
+    summary = wet.length ? `Pluie attendue de ${hour(wet[0].time)} à ${hour(wet[wet.length - 1].time + 3600)} environ, ${mmText(wet.reduce((a, h) => a + h.precipitation, 0))} au total.` : 'Pas de pluie significative prévue ce jour-là.';
+  } else if (metric === 'uv') {
+    summary = hiP.v < 3 ? 'Indice faible toute la journée, pas de protection particulière.' : `Indice maximal de ${Math.round(hiP.v)} vers ${hour(hiP.t)} : protection conseillée en milieu de journée.`;
+  } else if (metric === 'humidity') {
+    summary = `Humidité ${span}.`;
+  } else if (metric === 'pressure') {
+    const first = main[0].v;
+    const last = main[main.length - 1].v;
+    summary = `Pression ${span}, ${Math.abs(last - first) < 2 ? 'assez stable' : last > first ? 'en hausse' : 'en baisse'} sur la journée.`;
+  } else if (metric === 'visibility') {
+    summary = loP.v < 1 ? `Brouillard possible vers ${hour(loP.t)} (visibilité sous 1 km).` : `Visibilité ${span}.`;
+  }
+
   const d = new Date(day.time * 1000);
   const chartW = width - 32;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 30 }}>
-      <Header title={m.title} icon={m.icon} />
+      <Header title={m.title} icon={m.icon} onTitle={() => setMenu((v) => !v)} />
+      {menu ? <MetricMenu current={metric} onPick={(id) => { setMetric(id); setSecond(false); setMenu(false); }} /> : null}
 
       <View style={styles.days}>
         {days.map((dd, i) => {
@@ -142,6 +194,7 @@ export default function Detail() {
         yTicks={ticks}
         formatY={(v) => (metric === 'temp' ? `${Math.round(v)}°` : metric === 'pressure' ? `${Math.round(v)}` : `${Math.round(v)}`)}
         now={isToday ? nowSec : undefined}
+        formatValue={(v) => (metric === 'rain' ? `${Math.round(v)} %` : fmt(v))}
         bands={metric === 'uv' ? [{ from: 0.2, to: 3, label: 'Faible' }, { from: 3, to: 6, label: 'Modéré' }, { from: 6, to: 8, label: 'Élevé' }, { from: 8, to: 11, label: 'Très élevé' }] : undefined}
       />
 
@@ -173,12 +226,65 @@ export default function Detail() {
         </View>
       ) : null}
 
-      {compare ? (
+      {summary ? (
+        <View style={styles.box}>
+          <T style={styles.boxTitle}>En résumé</T>
+          <T style={{ fontSize: 16, lineHeight: 22 }}>{summary}</T>
+        </View>
+      ) : null}
+
+      {metric === 'rain' ? (
+        <View style={styles.box}>
+          <T style={styles.boxTitle}>Cumuls de pluie</T>
+          <View style={styles.kv}>
+            <T style={{ fontSize: 16 }}>24 dernières heures</T>
+            <T style={styles.kvVal}>{mmText(rainPast24)}</T>
+          </View>
+          <View style={[styles.kv, styles.kvBorder]}>
+            <T style={{ fontSize: 16 }}>24 prochaines heures</T>
+            <T style={styles.kvVal}>{mmText(rainNext24)}</T>
+          </View>
+        </View>
+      ) : null}
+
+      {comparison ? (
+        <View style={styles.box}>
+          <T style={styles.boxTitle}>Par rapport à hier</T>
+          <T style={{ fontSize: 16, marginBottom: 12 }}>{compare}</T>
+          {comparison.map((row) => (
+            <View key={row.label} style={styles.cmpRow}>
+              <T style={styles.cmpLabel}>{row.label}</T>
+              <View style={styles.cmpTrack}>
+                <View style={[styles.cmpFill, { width: `${Math.max(4, row.ratio * 100)}%`, backgroundColor: row.today ? m.color : 'rgba(255,255,255,0.35)' }]} />
+              </View>
+              <T style={styles.cmpVal}>{row.value}</T>
+            </View>
+          ))}
+        </View>
+      ) : compare ? (
         <View style={styles.box}>
           <T style={styles.boxTitle}>Par rapport à hier</T>
           <T style={{ fontSize: 16 }}>{compare}</T>
         </View>
       ) : null}
+
+      {metric === 'wind' ? (
+        <View style={styles.box}>
+          <T style={styles.boxTitle}>Échelle de Beaufort</T>
+          {BEAUFORT.map(([force, label, range, color]) => {
+            const active = Number.isFinite(nowVal) && beaufortOf(nowVal) === force;
+            return (
+              <View key={force} style={[styles.bfRow, active && styles.bfActive]}>
+                <View style={[styles.bfDot, { backgroundColor: color }]} />
+                <T style={styles.bfForce}>{force}</T>
+                <T style={{ flex: 1, fontSize: 15, color: active ? '#fff' : DIM }}>{label}</T>
+                <T style={{ fontSize: 15, color: active ? '#fff' : DIM }}>{range}</T>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
 
       <View style={styles.box}>
         <T style={styles.boxTitle}>À propos</T>
@@ -189,19 +295,61 @@ export default function Detail() {
   );
 }
 
-function Header({ title, icon }: { title: string; icon: (typeof METRICS)['temp']['icon'] }) {
+function Header({ title, icon, onTitle }: { title: string; icon: (typeof METRICS)['temp']['icon']; onTitle: () => void }) {
   return (
     <View style={styles.header}>
       <Pressable onPress={() => router.back()} style={styles.close} hitSlop={10}>
         <Icon name={{ ios: 'xmark', android: 'close' }} size={16} />
       </Pressable>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Icon name={icon} size={20} />
+      <Pressable onPress={onTitle} style={styles.titleBtn} hitSlop={8}>
+        <Icon name={icon} size={18} />
         <T style={styles.title}>{title}</T>
-      </View>
+        <Icon name={{ ios: 'chevron.down', android: 'expand_more' }} size={13} color={DIM} />
+      </Pressable>
       <View style={{ width: 36 }} />
     </View>
   );
+}
+
+const ORDER: MetricId[] = ['temp', 'rain', 'wind', 'uv', 'humidity', 'pressure', 'visibility'];
+
+function MetricMenu({ current, onPick }: { current: MetricId; onPick: (id: MetricId) => void }) {
+  return (
+    <View style={styles.menu}>
+      {ORDER.map((id, i) => (
+        <Fragment key={id}>
+          {i > 0 ? <View style={styles.menuSep} /> : null}
+          <Pressable onPress={() => onPick(id)} style={styles.menuItem}>
+            <Icon name={METRICS[id].icon} size={17} />
+            <T style={{ flex: 1, fontSize: 16 }}>{METRICS[id].title}</T>
+            {id === current ? <Icon name={{ ios: 'checkmark', android: 'check' }} size={15} /> : null}
+          </Pressable>
+        </Fragment>
+      ))}
+    </View>
+  );
+}
+
+// Échelle de Beaufort (force, désignation, vitesse en km/h, couleur)
+const BEAUFORT: [number, string, string, string][] = [
+  [0, 'Calme', '< 1', '#8EC5FF'],
+  [1, 'Très légère brise', '1 – 5', '#7CC9E8'],
+  [2, 'Légère brise', '6 – 11', '#6CCFC9'],
+  [3, 'Petite brise', '12 – 19', '#6FD3A0'],
+  [4, 'Jolie brise', '20 – 28', '#8AD46E'],
+  [5, 'Bonne brise', '29 – 38', '#B5D352'],
+  [6, 'Vent frais', '39 – 49', '#E2CB3E'],
+  [7, 'Grand frais', '50 – 61', '#F2AF3A'],
+  [8, 'Coup de vent', '62 – 74', '#F28C34'],
+  [9, 'Fort coup de vent', '75 – 88', '#EE6A30'],
+  [10, 'Tempête', '89 – 102', '#E5482E'],
+  [11, 'Violente tempête', '103 – 117', '#D2304A'],
+  [12, 'Ouragan', '≥ 118', '#B4246B'],
+];
+const LIMITS = [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118];
+function beaufortOf(kmh: number) {
+  const i = LIMITS.findIndex((l) => kmh < l);
+  return i === -1 ? 12 : i;
 }
 
 const styles = StyleSheet.create({
@@ -209,6 +357,22 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '700' },
+  titleBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)' },
+  menu: { backgroundColor: '#222B38', borderRadius: 14, marginBottom: 14, overflow: 'hidden' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  menuSep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)', marginLeft: 43 },
+  kv: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
+  kvBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.15)' },
+  kvVal: { fontSize: 16, fontWeight: '700', color: '#5AC8FA' },
+  cmpRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  cmpLabel: { width: 92, fontSize: 15 },
+  cmpTrack: { flex: 1, height: 22, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
+  cmpFill: { height: '100%', borderRadius: 6 },
+  cmpVal: { width: 78, textAlign: 'right', fontSize: 15, fontWeight: '700' },
+  bfRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 6, borderRadius: 8 },
+  bfActive: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  bfDot: { width: 12, height: 12, borderRadius: 6 },
+  bfForce: { width: 22, fontSize: 15, fontWeight: '700' },
   days: { flexDirection: 'row', justifyContent: 'space-between' },
   dayCol: { alignItems: 'center', gap: 6 },
   dayLetter: { fontSize: 12, color: DIM, fontWeight: '600' },

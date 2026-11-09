@@ -27,6 +27,31 @@ function Tile({ title, icon, value, unit, children, note, metric, wide }: { titl
   );
 }
 
+/** Jauge de pression : arc 970 → 1050 hPa, repère à la valeur actuelle. */
+function Gauge({ value, trend }: { value: number; trend: string }) {
+  const W = 120;
+  const R = 46;
+  const cx = W / 2;
+  const cy = 52;
+  const a0 = Math.PI * 0.8;
+  const a1 = Math.PI * 2.2;
+  const k = Math.min(1, Math.max(0, (value - 970) / 80));
+  const pt = (a: number, r: number) => `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`;
+  const ticks = Array.from({ length: 29 }, (_, i) => a0 + ((a1 - a0) * i) / 28);
+  const am = a0 + (a1 - a0) * k;
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Svg width={W} height={70}>
+        {ticks.map((a, i) => (
+          <Line key={i} x1={pt(a, R - 7).split(',')[0]} y1={pt(a, R - 7).split(',')[1]} x2={pt(a, R).split(',')[0]} y2={pt(a, R).split(',')[1]} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
+        ))}
+        <Line x1={pt(am, R - 12).split(',')[0]} y1={pt(am, R - 12).split(',')[1]} x2={pt(am, R + 3).split(',')[0]} y2={pt(am, R + 3).split(',')[1]} stroke="#fff" strokeWidth={4} strokeLinecap="round" />
+      </Svg>
+      {trend ? <T style={{ position: 'absolute', top: 30, fontSize: 18 }}>{trend === 'En hausse' ? '↑' : trend === 'En baisse' ? '↓' : '='}</T> : null}
+    </View>
+  );
+}
+
 /** Courbe du soleil sur la journée, avec la position actuelle. */
 function SunArc({ sunrise, sunset }: { sunrise: number; sunset: number }) {
   const W = 140;
@@ -128,9 +153,9 @@ export function Tiles({ forecast, obs }: { forecast: Forecast; obs: Observation 
         title="Précipitations"
         metric="rain"
         icon={{ ios: 'drop.fill', android: 'water_drop' }}
-        value={rain24 < 0.1 ? '0' : rain24.toFixed(1)}
-        unit="mm"
-        note={`Attendues dans les prochaines 24 h.${today && today.precipitationProbability !== null ? ` Risque aujourd'hui : ${today.precipitationProbability} %.` : ''}`}
+        value={today ? (today.precipitationSum < 0.1 ? '0' : today.precipitationSum < 10 ? today.precipitationSum.toFixed(1) : `${Math.round(today.precipitationSum)}`) : rain24.toFixed(1)}
+        unit="mm aujourd’hui"
+        note={tomorrow ? (tomorrow.precipitationSum < 0.5 ? 'Demain : pas de pluie notable.' : `Demain : ${Math.round(tomorrow.precipitationSum)} mm attendus.`) : undefined}
       />
       <Tile title="Humidité" metric="humidity" icon={{ ios: 'humidity.fill', android: 'humidity_percentage' }} value={`${Math.round(c.humidity)}`} unit="%" note={`Point de rosée : ${temp(c.dewPoint)}.`} />
       {uv !== null ? (
@@ -148,7 +173,9 @@ export function Tiles({ forecast, obs }: { forecast: Forecast; obs: Observation 
           {today ? <SunArc sunrise={today.sunrise} sunset={today.sunset} /> : null}
         </Tile>
       ) : null}
-      <Tile title="Pression" metric="pressure" icon={{ ios: 'gauge.with.dots.needle.33percent', android: 'speed' }} value={`${Math.round(c.pressure)}`} unit="hPa" note={trend ? `${trend} sur les 3 prochaines heures.` : undefined} />
+      <Tile title="Pression" metric="pressure" icon={{ ios: 'gauge.with.dots.needle.33percent', android: 'speed' }} value={`${Math.round(c.pressure)}`} unit="hPa" note={trend ? `${trend} sur les 3 prochaines heures.` : undefined}>
+        <Gauge value={c.pressure} trend={trend} />
+      </Tile>
       {vis !== null ? (
         <Tile
           title="Visibilité"

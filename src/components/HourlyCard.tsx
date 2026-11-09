@@ -7,7 +7,7 @@ import { symbolFor } from '../lib/sky';
 import { isRainy, weatherLabel, windDirection } from '../lib/weatherCodes';
 import { DIM, Glass, Icon, RAIN_BLUE, T } from './ui';
 
-type Mode = 'temp' | 'rain' | 'wind';
+export type Mode = 'temp' | 'rain' | 'wind';
 type Item = { kind: 'hour'; h: HourPoint; first: boolean } | { kind: 'sun'; time: number; rise: boolean };
 
 /** Phrase de synthèse pour les prochaines heures. */
@@ -33,14 +33,13 @@ function summary(hours: HourPoint[]) {
   return parts.join(' ');
 }
 
-const MODES: { id: Mode; icon: Parameters<typeof Icon>[0]['name'] }[] = [
-  { id: 'temp', icon: { ios: 'cloud.sun.fill', android: 'partly_cloudy_day' } },
-  { id: 'rain', icon: { ios: 'drop.fill', android: 'water_drop' } },
-  { id: 'wind', icon: { ios: 'wind', android: 'air' } },
+const MODES: { id: Mode; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
+  { id: 'temp', label: 'Températures', icon: { ios: 'cloud.sun.fill', android: 'partly_cloudy_day' } },
+  { id: 'rain', label: 'Pluie', icon: { ios: 'drop.fill', android: 'water_drop' } },
+  { id: 'wind', label: 'Vent', icon: { ios: 'wind', android: 'air' } },
 ];
 
-export function HourlyCard({ hourly, daily, minutely }: { hourly: HourPoint[]; daily: DayPoint[]; minutely: Minutely }) {
-  const [mode, setMode] = useState<Mode>('temp');
+export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: { hourly: HourPoint[]; daily: DayPoint[]; minutely: Minutely; mode: Mode; onMode: (m: Mode) => void }) {
   const [quarter, setQuarter] = useState(false);
   const quarters = upcomingMinutely(minutely).filter((q) => q.temperature !== null || q.windSpeed !== null);
   const hours = upcomingHours(hourly).slice(0, 25);
@@ -67,7 +66,7 @@ export function HourlyCard({ hourly, daily, minutely }: { hourly: HourPoint[]; d
         </Pressable>
         <View style={styles.modes}>
           {MODES.map((m) => (
-            <Pressable key={m.id} onPress={() => setMode(m.id)} style={[styles.mode, mode === m.id && styles.modeOn]} hitSlop={4}>
+            <Pressable key={m.id} onPress={() => setMode(m.id)} accessibilityRole="button" accessibilityLabel={m.label} style={[styles.mode, mode === m.id && styles.modeOn]} hitSlop={4}>
               <Icon name={m.icon} size={15} />
             </Pressable>
           ))}

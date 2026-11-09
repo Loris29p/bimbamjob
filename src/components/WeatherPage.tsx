@@ -1,8 +1,10 @@
 // Une page = un lieu : en-tête, cartes de prévisions et tuiles de détail.
+import MaskedViewBase from '@react-native-masked-view/masked-view';
+import type { ComponentType, ReactNode } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Platform, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { minutesUntilRain } from '../lib/forecast';
 import { temp, time } from '../lib/format';
@@ -16,13 +18,20 @@ import { useForecast } from '../lib/useForecast';
 import { weatherLabel } from '../lib/weatherCodes';
 import { AirCard } from './AirCard';
 import { DailyCard } from './DailyCard';
-import { HourlyCard } from './HourlyCard';
+import { HourlyCard, type Mode } from './HourlyCard';
 import { MoonCard } from './MoonCard';
 import { ago, ObservationCard, pretty } from './ObservationCard';
 import { RainCard } from './RainCard';
 import { Tiles } from './Tiles';
 import { DIM, T } from './ui';
 import { VigilanceBanner } from './VigilanceBanner';
+
+// Les types fournis par la bibliothèque datent d'avant React 19.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Le masque n'existe pas sur le web : on affiche alors le contenu tel quel.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MaskedView: ComponentType<any> =
+  Platform.OS === 'web' ? ({ children, style }: { children: ReactNode; style: object }) => <View style={style}>{children}</View> : (MaskedViewBase as unknown as ComponentType<any>);
 
 export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset: number }) {
   const { width, height } = useWindowDimensions();
@@ -51,10 +60,24 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
   const bigOpacity = scrollY.interpolate({ inputRange: [0, 110], outputRange: [1, 0], extrapolate: 'clamp' });
   const compactOpacity = scrollY.interpolate({ inputRange: [90, 140], outputRange: [0, 1], extrapolate: 'clamp' });
   const headerShift = scrollY.interpolate({ inputRange: [-100, 0, 160], outputRange: [40, 0, 90], extrapolate: 'clamp' });
+  // Zone de l'en-tête compact : une fois repliée, les cartes passent DESSOUS (masquées) au lieu de la recouvrir.
+  const compactHeight = insets.top + 62;
+  const maskTop = scrollY.interpolate({ inputRange: [70, 140], outputRange: [1, 0], extrapolate: 'clamp' });
+  const [mode, setMode] = useState<Mode>('temp');
 
   return (
     <View style={{ width, height }}>
       <LinearGradient colors={[...colors]} style={StyleSheet.absoluteFill} />
+      <MaskedView
+        style={StyleSheet.absoluteFill}
+        maskElement={
+          <View style={{ flex: 1 }}>
+            <Animated.View style={{ height: compactHeight, backgroundColor: '#000', opacity: maskTop }} />
+            <LinearGradient colors={['rgba(0,0,0,0)', '#000']} style={{ height: 14 }} />
+            <View style={{ flex: 1, backgroundColor: '#000' }} />
+          </View>
+        }
+      >
       <Animated.ScrollView
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
@@ -92,9 +115,9 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
           <>
             <VigilanceBanner department={place.department} />
             <RainCard minutely={forecast.minutely} />
-            <HourlyCard hourly={forecast.hourly} daily={forecast.daily} minutely={forecast.minutely} />
-            <Pressable onPress={() => router.push({ pathname: '/detail', params: { metric: 'temp' } })}>
-              <DailyCard daily={forecast.daily} currentTemp={forecast.current.temperature} />
+            <HourlyCard hourly={forecast.hourly} daily={forecast.daily} minutely={forecast.minutely} mode={mode} onMode={setMode} />
+            <Pressable onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
+              <DailyCard daily={forecast.daily} hourly={forecast.hourly} currentTemp={forecast.current.temperature} mode={mode} />
             </Pressable>
             {obs ? <ObservationCard obs={obs} /> : null}
             <AirCard place={place} />
@@ -106,10 +129,10 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
           </>
         ) : null}
       </Animated.ScrollView>
+      </MaskedView>
 
       {/* En-tête compact qui apparaît quand on fait défiler */}
       <Animated.View pointerEvents="none" style={[styles.compact, { paddingTop: insets.top + 6, opacity: compactOpacity }]}>
-        <LinearGradient colors={[colors[0], colors[0]]} style={StyleSheet.absoluteFill} />
         <T style={styles.compactCity} numberOfLines={1}>
           {place.name}
         </T>
