@@ -15,8 +15,12 @@ const LIQUID = Platform.OS === 'ios' && isLiquidGlassAvailable();
  * Matériau de fond fourni par iOS : « Liquid Glass » sur iOS 26 et plus,
  * flou système classique sinon (et simple voile sur Android/web).
  */
-export function Material({ style, tint = 'systemUltraThinMaterialDark', glass = 'regular', interactive }: { style?: StyleProp<ViewStyle>; tint?: BlurTint; glass?: 'regular' | 'clear'; interactive?: boolean }) {
-  if (LIQUID) return <GlassView style={[StyleSheet.absoluteFill, style]} glassEffectStyle={glass} isInteractive={interactive} />;
+// Teinte sombre posée sur le verre : sans elle, le verre iOS 26 est trop clair sur un ciel gris
+// et les textes blancs / gris deviennent illisibles.
+export const GLASS_TINT = 'rgba(28,38,56,0.42)';
+
+export function Material({ style, tint = 'systemUltraThinMaterialDark', glass = 'regular', interactive, glassTint = GLASS_TINT }: { style?: StyleProp<ViewStyle>; tint?: BlurTint; glass?: 'regular' | 'clear'; interactive?: boolean; glassTint?: string }) {
+  if (LIQUID) return <GlassView style={[StyleSheet.absoluteFill, style]} glassEffectStyle={glass} isInteractive={interactive} tintColor={glassTint} colorScheme="dark" />;
   if (Platform.OS === 'ios') return <BlurView intensity={60} tint={tint} style={[StyleSheet.absoluteFill, style]} />;
   return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,20,40,0.35)' }, style]} />;
 }
