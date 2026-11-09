@@ -334,11 +334,11 @@ function loadForecast(){
 }
 function applyForecast(fc){
   var now=Date.now()/1000,lastT=pastFrames.length?pastFrames[pastFrames.length-1].t:0;
-  // 1re heure : radar prolongé ; ensuite : prévision AROME au quart d'heure
+  // Mode 3 h : radar seulement (2 h passées + 1re heure prolongée), comme l'app Météo d'Apple.
+  // La grille AROME, bien plus grossière, n'est utilisée qu'en mode 12 h : les mélanger
+  // faisait « sauter » l'image au passage de l'une à l'autre. Sans radar : AROME au quart d'heure.
   var nc=lastT?NOWCAST.map(function(m){return{kind:'nc',t:lastT+m*60,m:m,empty:false}}):[];
-  var limit=lastT?lastT+NOWCAST[NOWCAST.length-1]*60:now-900;
-  var future=fc?fc.quarter.filter(function(f){return f.t>limit}):[];
-  frames['3h']=pastFrames.concat(nc,future);
+  frames['3h']=lastT?pastFrames.concat(nc):(fc?fc.quarter.filter(function(f){return f.t>now-900}):[]);
   frames['12h']=fc?fc.hourly:[];
   fcCache={};markKey='';
 }
