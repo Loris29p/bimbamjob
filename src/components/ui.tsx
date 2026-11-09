@@ -31,7 +31,7 @@ export function Icon({ name, size = 18, color = WHITE, multicolor, style }: Icon
 export function Glass({ title, icon, children, style }: { title?: string; icon?: SymbolViewProps['name']; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.card, style]}>
-      {Platform.OS === 'ios' ? <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} /> : null}
+      {Platform.OS === 'ios' ? <BlurView intensity={60} tint="systemUltraThinMaterialDark" style={StyleSheet.absoluteFill} /> : null}
       {title ? (
         <View style={styles.header}>
           {icon ? <Icon name={icon} size={13} color={DIM} /> : null}
@@ -45,12 +45,14 @@ export function Glass({ title, icon, children, style }: { title?: string; icon?:
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 22,
+    padding: 16,
     marginBottom: 10,
     overflow: 'hidden',
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(20,30,50,0.12)' : 'rgba(10,20,40,0.28)',
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.04)' : 'rgba(10,20,40,0.3)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  title: { color: DIM, fontSize: 12.5, fontWeight: '600', letterSpacing: 0.4 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.2)' },
+  title: { color: DIM, fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
 });

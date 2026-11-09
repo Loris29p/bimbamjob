@@ -41,11 +41,11 @@ export default function Home() {
       {/* Barre flottante : radar · pages · villes */}
       <View pointerEvents="box-none" style={[styles.bar, { bottom: insets.bottom + 6 }]}>
         <Pressable onPress={() => router.push('/radar')} accessibilityLabel="Radar de pluie" style={styles.round}>
-          {Platform.OS === 'ios' ? <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} /> : null}
+          {Platform.OS === 'ios' ? <BlurView intensity={70} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} /> : null}
           <Icon name={{ ios: 'map', android: 'map' }} size={22} />
         </Pressable>
         <View style={styles.pill}>
-          {Platform.OS === 'ios' ? <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} /> : null}
+          {Platform.OS === 'ios' ? <BlurView intensity={70} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} /> : null}
           {places.map((p, i) =>
             p.isGps ? (
               <Icon key={placeKey(p)} name={{ ios: 'location.fill', android: 'near_me' }} size={11} color={i === activeIndex ? '#fff' : 'rgba(255,255,255,0.45)'} />
@@ -55,7 +55,7 @@ export default function Home() {
           )}
         </View>
         <Pressable onPress={() => router.push('/villes')} accessibilityLabel="Liste des villes" style={styles.round}>
-          {Platform.OS === 'ios' ? <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} /> : null}
+          {Platform.OS === 'ios' ? <BlurView intensity={70} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} /> : null}
           <Icon name={{ ios: 'list.bullet', android: 'list' }} size={22} />
         </Pressable>
       </View>

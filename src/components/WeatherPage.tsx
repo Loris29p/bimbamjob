@@ -22,6 +22,7 @@ import { HourlyCard, type Mode } from './HourlyCard';
 import { MoonCard } from './MoonCard';
 import { ago, ObservationCard, pretty } from './ObservationCard';
 import { RainCard } from './RainCard';
+import { SkyBackground } from './SkyBackground';
 import { Tiles } from './Tiles';
 import { DIM, T } from './ui';
 import { VigilanceBanner } from './VigilanceBanner';
@@ -67,7 +68,7 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
 
   return (
     <View style={{ width, height }}>
-      <LinearGradient colors={[...colors]} style={StyleSheet.absoluteFill} />
+      <SkyBackground code={c?.weatherCode} isDay={c?.isDay} cloudCover={c?.cloudCover} rate={c?.precipitation} />
       <MaskedView
         style={StyleSheet.absoluteFill}
         maskElement={
@@ -144,11 +145,11 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
 
 const styles = StyleSheet.create({
   header: { alignItems: 'center', marginBottom: 28 },
-  myPos: { fontSize: 13, fontWeight: '700', letterSpacing: 0.6 },
-  city: { fontSize: 32, fontWeight: '500', marginTop: 2 },
-  temp: { fontSize: 96, fontWeight: '200', lineHeight: 104, marginLeft: 24 },
-  cond: { fontSize: 20, fontWeight: '500', color: DIM },
-  hilo: { fontSize: 20, fontWeight: '500', marginTop: 2 },
+  myPos: { fontSize: 13, fontWeight: '600', letterSpacing: 0.4 },
+  city: { fontSize: 34, fontWeight: '400', marginTop: 2, textShadowColor: 'rgba(0,0,0,0.12)', textShadowRadius: 6 },
+  temp: { fontSize: 102, fontWeight: '100', lineHeight: 112, marginLeft: 26, fontVariant: ['tabular-nums'], textShadowColor: 'rgba(0,0,0,0.12)', textShadowRadius: 8 },
+  cond: { fontSize: 20, fontWeight: '500' },
+  hilo: { fontSize: 20, fontWeight: '500', marginTop: 2, fontVariant: ['tabular-nums'] },
   retry: { marginTop: 30, padding: 16 },
   measured: { fontSize: 12, color: DIM, marginTop: 6 },
   compact: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 10 },
