@@ -70,14 +70,20 @@ var PALETTES={
   air:[[0,[80,240,230,.45]],[20,[80,204,170,.45]],[40,[240,230,65,.5]],[60,[255,80,80,.55]],[80,[150,0,50,.6]],[100,[125,33,129,.65]]]
 };
 // Valeurs de la grille interpolées sur l'image ; stops absent = pluie (palette PAL)
+// Poids de l'interpolation bicubique (Catmull-Rom) : surface lisse qui passe par chaque point,
+// sans les « losanges » de l'interpolation linéaire ni le flou qui effaçait les petites averses.
+function cubic(t){var t2=t*t,t3=t2*t;return[(-t3+2*t2-t)/2,(3*t3-5*t2+2)/2,(-3*t3+4*t2+t)/2,(t3-t2)/2]}
 function renderGrid(A,stops){
   var ctx=gridCanvas.getContext('2d'),img=ctx.createImageData(FS,FS),d=img.data,R=stops?null:new Float32Array(FS*FS);
-  for(var y=0;y<FS;y++){var gy=y/(FS-1)*(N-1),i0=Math.floor(gy),i1=Math.min(N-1,i0+1),fy=gy-i0;
-    for(var x=0;x<FS;x++){var gx=x/(FS-1)*(N-1),j0=Math.floor(gx),j1=Math.min(N-1,j0+1),fx=gx-j0;
-      var v=A[i0*N+j0]*(1-fx)*(1-fy)+A[i0*N+j1]*fx*(1-fy)+A[i1*N+j0]*(1-fx)*fy+A[i1*N+j1]*fx*fy,o=(y*FS+x)*4;
-      if(!stops){R[y*FS+x]=enc(v)}
+  // pluie : on interpole les niveaux (échelle logarithmique), plus fidèle aux bords des zones de pluie
+  var G=stops?A:A.map(function(v){return enc(v)});
+  var at=function(i,j){return G[Math.max(0,Math.min(N-1,i))*N+Math.max(0,Math.min(N-1,j))]};
+  for(var y=0;y<FS;y++){var gy=y/(FS-1)*(N-1),i0=Math.floor(gy),wy=cubic(gy-i0);
+    for(var x=0;x<FS;x++){var gx=x/(FS-1)*(N-1),j0=Math.floor(gx),wx=cubic(gx-j0),v=0,o=(y*FS+x)*4;
+      for(var a=0;a<4;a++){var row=0;for(var b=0;b<4;b++)row+=wx[b]*at(i0-1+a,j0-1+b);v+=wy[a]*row}
+      if(!stops){R[y*FS+x]=Math.max(0,v)}
       else{if(!isFinite(v))continue;var c=lerpStops(stops,v);d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=Math.round(c[3]*255)}}}
-  if(R){soften(R,FS,FS,4);paint(R,d)}
+  if(R){soften(R,FS,FS,1);paint(R,d)}
   ctx.putImageData(img,0,0);
   return{uri:finish(gridCanvas,0,2),bounds:[[grid.n,grid.e],[grid.s,grid.w]]};
 }
@@ -123,20 +129,82 @@ function makeTiles(v){
   return t;
 }
 var radCache={};
-function radarImage(path){
-  var T=tiles,key=path+'|'+T.key;if(radCache[key])return radCache[key];
+// Niveaux bruts (0–255) d'une image radar, assemblés pour la zone visible
+function radarField(path){
+  var T=tiles,key='f|'+path+'|'+T.key;if(radCache[key])return radCache[key];
   var jobs=[],m=Math.pow(2,T.z);
   for(var y=T.y0;y<=T.y1;y++)for(var x=T.x0;x<=T.x1;x++)jobs.push(levels(rvHost+path+'/256/'+T.z+'/'+(((x%m)+m)%m)+'/'+y+'/2/1_0.png'));
   return radCache[key]=Promise.all(jobs).then(function(arr){
-    var nx=T.x1-T.x0+1,ny=T.y1-T.y0+1,c=document.createElement('canvas');c.width=nx*256;c.height=ny*256;
-    var ctx=c.getContext('2d'),img=ctx.createImageData(c.width,c.height),d=img.data,W=c.width,H=c.height,F=new Float32Array(W*H);
+    var nx=T.x1-T.x0+1,ny=T.y1-T.y0+1,W=nx*256,H=ny*256,F=new Uint8Array(W*H);
     arr.forEach(function(A,k){if(!A)return;var ox=(k%nx)*256,oy=Math.floor(k/nx)*256;
       for(var j=0;j<65536;j++){if(A[j])F[(oy+(j>>8))*W+ox+(j&255)]=A[j]}});
-    soften(F,W,H,1);paint(F,d);
-    ctx.putImageData(img,0,0);
-    return{uri:finish(c,0,1),bounds:T.bounds};
+    // Zone large : moitié de la résolution (4 fois moins de calcul et d'images plus légères,
+    // indispensable pour les images intermédiaires de l'animation ; invisible après adoucissement)
+    if(W>768){var w=W>>1,h=H>>1,G=new Uint8Array(w*h);
+      for(var y=0;y<h;y++)for(var x=0;x<w;x++){var o=2*y*W+2*x;G[y*w+x]=(F[o]+F[o+1]+F[o+W]+F[o+W+1]+2)>>2}
+      F=G;W=w;H=h}
+    return{F:F,W:W,H:H,T:T};
   });
 }
+// Niveaux → image (adoucie, colorée) posée sur la carte
+function fieldImage(F,W,H,bounds){
+  var c=document.createElement('canvas');c.width=W;c.height=H;var ctx=c.getContext('2d'),img=ctx.createImageData(W,H),G=new Float32Array(F);
+  soften(G,W,H,1);paint(G,img.data);ctx.putImageData(img,0,0);
+  return{uri:finish(c,0,1),bounds:bounds};
+}
+function radarImage(path){
+  var key='i|'+path+'|'+tiles.key;if(radCache[key])return radCache[key];
+  return radCache[key]=radarField(path).then(function(r){return fieldImage(r.F,r.W,r.H,r.T.bounds)});
+}
+// ---- Prévision immédiate (1re heure) : on prolonge le mouvement de la pluie vu par le radar ----
+// Comme l'app Météo d'Apple pour l'heure à venir : bien plus détaillé que la grille AROME.
+// Déplacement mesuré entre l'image radar d'il y a 30 min et la dernière (recherche du meilleur décalage).
+function motion(){
+  var key='mv|'+tiles.key;if(radCache[key])return radCache[key];
+  var n=pastFrames.length;if(n<2)return Promise.resolve({vx:0,vy:0});
+  var fa=pastFrames[Math.max(0,n-4)],fb=pastFrames[n-1];
+  return radCache[key]=Promise.all([radarField(fa.path),radarField(fb.path)]).then(function(r){
+    var W=r[0].W,H=r[0].H,S=4,w=Math.floor(W/S),h=Math.floor(H/S);
+    function down(F){var o=new Float32Array(w*h);for(var y=0;y<h;y++)for(var x=0;x<w;x++){var s=0;for(var a=0;a<S;a++)for(var b=0;b<S;b++)s+=F[(y*S+a)*W+x*S+b];o[y*w+x]=s/(S*S)}return o}
+    var A=down(r[0].F),B=down(r[1].F),R=10,best=1e18,bx=0,by=0;
+    for(var dy=-R;dy<=R;dy++)for(var dx=-R;dx<=R;dx++){var s=0,cnt=0;
+      for(var y=R;y<h-R;y+=2)for(var x=R;x<w-R;x+=2){var p=A[y*w+x],q=B[(y+dy)*w+x+dx];if(p||q){s+=Math.abs(p-q);cnt++}}
+      if(!cnt)continue;s=s/cnt+0.15*(dx*dx+dy*dy); // petite préférence pour les faibles déplacements
+      if(s<best){best=s;bx=dx;by=dy}}
+    var dt=Math.max(60,fb.t-fa.t);return{vx:bx*S/dt,vy:by*S/dt}; // pixels par seconde
+  });
+}
+function nowField(m){ // pluie dans m minutes : dernière image radar déplacée, qui s'estompe un peu
+  var key='ncf'+m+'|'+tiles.key;if(radCache[key])return radCache[key];
+  var last=pastFrames[pastFrames.length-1];
+  return radCache[key]=Promise.all([radarField(last.path),motion()]).then(function(r){
+    var A=r[0],v=r[1],W=A.W,H=A.H,sx=Math.round(v.vx*m*60),sy=Math.round(v.vy*m*60),G=new Uint8Array(W*H),fade=m/60*20;
+    for(var y=Math.max(0,sy);y<Math.min(H,H+sy);y++){var src=(y-sy)*W-sx;
+      for(var x=Math.max(0,sx);x<Math.min(W,W+sx);x++){var L=A.F[src+x];if(L)G[y*W+x]=Math.max(0,L-fade)}}
+    return{F:G,W:W,H:H,T:A.T};
+  });
+}
+function nowImage(m){
+  var key='nc'+m+'|'+tiles.key;if(radCache[key])return radCache[key];
+  return radCache[key]=nowField(m).then(function(r){return fieldImage(r.F,r.W,r.H,r.T.bounds)});
+}
+function isRadar(f){return f.kind==='radar'||f.kind==='nc'}
+function frameField(f){return f.kind==='radar'?radarField(f.path):nowField(f.m)}
+function frameImage(f){return f.kind==='radar'?radarImage(f.path):nowImage(f.m)}
+// ---- Animation fluide ----
+// La carte Apple ne sait pas rendre une image à moitié transparente : pour que la pluie glisse
+// d'une image à l'autre (au lieu de sauter), on fabrique des images intermédiaires (¼, ½, ¾)
+// en mélangeant les intensités des deux images voisines.
+var STEPS=4;
+function blendImage(a,b,q){
+  var key='bl|'+(a.path||a.m)+'|'+(b.path||b.m)+'|'+q+'|'+tiles.key;if(radCache[key])return radCache[key];
+  return radCache[key]=Promise.all([frameField(a),frameField(b)]).then(function(r){
+    var A=r[0].F,B=r[1].F,G=new Uint8Array(A.length);
+    for(var j=0;j<A.length;j++){var x=A[j],y=B[j];if(x||y)G[j]=Math.round(x*(1-q)+y*q)}
+    return fieldImage(G,r[0].W,r[0].H,r[0].T.bounds);
+  });
+}
+var NOWCAST=[10,20,30,40,50,60]; // minutes après la dernière image radar
 
 // ---- Frise : images (passé radar + prévision) et lecture ----
 var frames={'3h':[],'12h':[]}, mode='3h', layer='rain', rvHost='', pastFrames=[];
@@ -154,16 +222,23 @@ function layerValues(i){ // valeurs de la grille pour l'image horaire i, selon l
   if(layer==='air'&&hourlyAir){var j=nearestIn(hourlyAir.times,hourlyTimes[i]);return hourlyAir.map(function(a){return a&&a[j]!=null?a[j]:NaN})}
   return null;
 }
-// Pose l'image i du mode courant (une seule image à la fois : radar OU prévision OU autre calque)
-function render(i){
-  var a=frames[mode][i],key=layer+mode+i+'|'+(tiles?tiles.key:'')+'|'+(grid?grid.n+','+grid.w:'');
+// Pose l'image du mode courant entre les images i et i+1 (q = 0, ¼, ½, ¾) :
+// une seule image à la fois (radar OU prévision OU autre calque).
+function render(i,q){
+  var list=frames[mode],a=list[i],b=list[i+1];if(!b)q=0;
+  if(q&&layer==='rain'&&isRadar(a)!==isRadar(b)){if(q>=0.5)i++;q=0;a=list[i];b=list[i+1]} // radar ↔ grille : pas de mélange
+  var key=layer+mode+i+'/'+q+'|'+(tiles?tiles.key:'')+'|'+(grid?grid.n+','+grid.w:'');
   if(!a||key===lastKey)return;lastKey=key;
-  if(layer==='rain'&&a.kind==='radar'){
+  if(layer==='rain'&&isRadar(a)){
     if(!tiles)return;
-    radarImage(a.path).then(function(img){if(lastKey===key)send(img)});
+    (q?blendImage(a,b,q):frameImage(a)).then(function(img){if(lastKey===key)send(img)});
   }else{
-    var ck=layer+mode+i;
-    if(!fcCache[ck]){var A=layer==='rain'?a.vals:layerValues(i);fcCache[ck]=A?renderGrid(A,layer==='rain'?null:PALETTES[layer]):null}
+    var ck=layer+mode+i+'/'+q;
+    if(!(ck in fcCache)){
+      var A=layer==='rain'?a.vals:layerValues(i),B=q?(layer==='rain'?b.vals:layerValues(i+1)):null;
+      if(A&&B)A=A.map(function(v,k){return v*(1-q)+B[k]*q});
+      fcCache[ck]=A?renderGrid(A,layer==='rain'?null:PALETTES[layer]):null;
+    }
     send(fcCache[ck]);
   }
 }
@@ -172,7 +247,7 @@ function show(p){
   var list=frames[mode];if(!list.length)return;
   pos=Math.max(0,Math.min(list.length-1,p));var i=Math.floor(pos),k=pos-i;if(i>=list.length-1){i=list.length-1;k=0}
   var a=list[i],b=list[i+1]&&k>0?list[i+1]:null;
-  render(b&&k>=0.5?i+1:i);
+  var q=Math.round(k*STEPS)/STEPS;if(q>=1)render(i+1,0);else render(i,q);
   var t=b?a.t+(b.t-a.t)*k:a.t,cur=k<0.5||!b?a:b;
   showMarks(t);showPlaces(t);
   curT=t;curEmpty=layer==='rain'&&!!cur.empty;
@@ -258,9 +333,12 @@ function loadForecast(){
   }).catch(function(){return null});
 }
 function applyForecast(fc){
-  var now=Date.now()/1000;
-  var future=fc?fc.quarter.filter(function(f){return f.t>(pastFrames.length?pastFrames[pastFrames.length-1].t:now-900)}):[];
-  frames['3h']=pastFrames.concat(future);
+  var now=Date.now()/1000,lastT=pastFrames.length?pastFrames[pastFrames.length-1].t:0;
+  // 1re heure : radar prolongé ; ensuite : prévision AROME au quart d'heure
+  var nc=lastT?NOWCAST.map(function(m){return{kind:'nc',t:lastT+m*60,m:m,empty:false}}):[];
+  var limit=lastT?lastT+NOWCAST[NOWCAST.length-1]*60:now-900;
+  var future=fc?fc.quarter.filter(function(f){return f.t>limit}):[];
+  frames['3h']=pastFrames.concat(nc,future);
   frames['12h']=fc?fc.hourly:[];
   fcCache={};markKey='';
 }
@@ -277,8 +355,12 @@ function setLayer(l){
 }
 // Prépare d'avance toutes les images radar de la zone, pour une lecture fluide
 function preloadRadar(){
-  if(!tiles||!rvHost)return;var list=pastFrames.slice(),k=0;
-  (function next(){if(k<list.length)Promise.resolve(radarImage(list[k++].path)).then(next)})();
+  if(!tiles||!rvHost||!pastFrames.length)return;var jobs=pastFrames.map(function(f){return function(){return radarImage(f.path)}})
+    .concat(NOWCAST.map(function(m){return function(){return nowImage(m)}})),k=0;
+  // puis les images intermédiaires de l'animation
+  var seq=frames['3h'].filter(isRadar);
+  for(var i=0;i+1<seq.length;i++)for(var s=1;s<STEPS;s++)(function(a,b,q){jobs.push(function(){return blendImage(a,b,q)})})(seq[i],seq[i+1],s/STEPS);
+  (function next(){if(k<jobs.length)jobs[k++]().then(next,next)})();
 }
 
 // ---- Zone visible (envoyée par l'app quand on déplace / zoome la carte) ----

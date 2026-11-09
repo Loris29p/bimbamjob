@@ -110,7 +110,7 @@ export default function Radar() {
 
         {marks.map((m, i) => (
           <Marker key={`m${i}`} coordinate={{ latitude: m.lat, longitude: m.lon }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={styles.mark}>
+            <View style={styles.mark} collapsable={false}>
               {m.rot != null ? <Text style={[styles.markText, { transform: [{ rotate: `${m.rot}deg` }] }]}>↑</Text> : null}
               <Text style={styles.markText}>{m.text}</Text>
             </View>
@@ -119,7 +119,7 @@ export default function Radar() {
 
         {others.map((o, i) => (
           <Marker key={`o${i}`} coordinate={{ latitude: o.lat, longitude: o.lon }} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.place}>
+            <View style={styles.place} collapsable={false}>
               <View style={styles.placeDot}>
                 <Text style={styles.placeTemp}>{info?.others[i] != null ? Math.round(info.others[i]!) : '–'}</Text>
               </View>
@@ -131,9 +131,11 @@ export default function Radar() {
         ))}
 
         {/* Lieu affiché : bulle avec température et temps. Apple Plans centre toujours le dessin
-            sur le lieu (la prop anchor ne vaut que pour Google Maps) : la pointe est donc au centre. */}
+            sur le lieu (la prop anchor ne vaut que pour Google Maps) : la pointe est donc au centre.
+            collapsable={false} : sinon iOS supprime ce cadre invisible (« aplatissement » des vues)
+            et la carte se cale sur le rond au lieu de la pointe. */}
         <Marker coordinate={{ latitude: lat, longitude: lon }} anchor={{ x: 0.5, y: 0.5 }} zIndex={10}>
-          <View style={styles.me}>
+          <View style={styles.me} collapsable={false}>
             <View style={styles.bubble}>
               <Text style={styles.bubbleTemp}>{me?.temp != null ? `${Math.round(me.temp)}°` : '–'}</Text>
               {me?.code != null ? <Icon name={symbolFor(me.code, me.day)} size={24} color="#FFFFFF" /> : null}
