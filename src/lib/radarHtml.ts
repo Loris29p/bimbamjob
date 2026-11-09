@@ -2,7 +2,7 @@
 //  - Passé : images radar observées (RainViewer, mosaïque incluant les radars Météo-France).
 //  - Futur : prévision du modèle AROME de Météo-France (via Open-Meteo), calculée sur une grille
 //    de points autour de toi puis dessinée en couleurs : au quart d'heure sur 3 h, à l'heure sur 12 h.
-export function radarHtml(lat: number, lon: number, dark: boolean) {
+export function radarHtml(lat: number, lon: number, dark: boolean, insets: { top: number; bottom: number } = { top: 47, bottom: 34 }) {
   // Fonds de carte Esri (sans clé) : le fond, puis les noms de villes par-dessus la pluie.
   const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
   const base = `${esri}${dark ? 'World_Dark_Gray_Base' : 'World_Light_Gray_Base'}/MapServer/tile/{z}/{y}/{x}`;
@@ -18,14 +18,14 @@ export function radarHtml(lat: number, lon: number, dark: boolean) {
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body,#map{margin:0;height:100%;background:${dark ? '#0B1520' : '#EEF3F8'};font:15px -apple-system,Roboto,sans-serif;color:${text}}
   .glass{background:${panel};backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
-  #legend{position:absolute;left:12px;top:calc(env(safe-area-inset-top) + 66px);z-index:1000;padding:10px 12px;font-size:13px}
+  #legend{position:absolute;left:12px;top:${insets.top + 62}px;z-index:1000;padding:10px 12px;font-size:13px}
   #legend b{display:block;margin-bottom:6px;font-size:14px}
   #legend .row{display:flex;gap:8px;align-items:stretch}
   #legend .bar{width:6px;border-radius:3px;background:linear-gradient(#FFF27A,#C77DFF,#4E7CF5,#9CC8FF)}
   #legend .labels{display:flex;flex-direction:column;justify-content:space-between;height:96px;color:${sub}}
-  #side{position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom) + 150px);z-index:1000;display:flex;flex-direction:column}
+  #side{position:absolute;right:12px;bottom:${insets.bottom + 150}px;z-index:1000;display:flex;flex-direction:column}
   #side button{width:46px;height:46px;border:0;background:none;font-size:20px;color:${text}}
-  #panel{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:1000;padding:12px 14px}
+  #panel{position:absolute;left:12px;right:12px;bottom:${insets.bottom + 10}px;z-index:1000;padding:12px 14px}
   #top{display:flex;align-items:center;gap:10px}
   #play{width:42px;height:42px;border-radius:21px;border:0;background:rgba(127,127,127,.22);color:${text};font-size:16px}
   #title{font-weight:700;font-size:16px}
@@ -37,12 +37,13 @@ export function radarHtml(lat: number, lon: number, dark: boolean) {
   #slider{width:100%;margin:0}
   #ticks{display:flex;justify-content:space-between;color:${sub};font-size:12px;margin-top:2px}
   #now{position:absolute;top:-2px;width:2px;height:14px;background:${text};border-radius:1px}
-  #msg{position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:64px;right:76px;z-index:1000;text-align:center;font-size:13px;padding:6px 10px;display:none}
+  #msg{position:absolute;top:${insets.top + 8}px;left:64px;right:76px;z-index:1000;text-align:center;font-size:13px;padding:6px 10px;display:none}
   .temp{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:17px;background:rgba(70,80,95,.85);color:#fff;font-weight:700;font-size:14px;border:1.5px solid rgba(255,255,255,.7)}
   .me{display:flex;flex-direction:column;align-items:center}
   .me .bubble{width:58px;height:58px;border-radius:29px;background:rgba(150,160,175,.95);border:3px solid #fff;color:#fff;font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.25)}
   .me .dot{width:12px;height:12px;border-radius:6px;background:#2F7BF6;border:2px solid #fff;margin-top:4px}
   .rain{filter:blur(7px)}
+  .radar{filter:blur(1.5px)}
   .leaflet-control-attribution{font-size:9px;background:transparent!important}
 </style></head><body>
 <div id="map"></div>
@@ -75,7 +76,7 @@ function hm(t){var d=new Date(t*1000);return pad(d.getHours())+':'+pad(d.getMinu
 function hh(t){return new Date(t*1000).getHours()+' h'}
 
 // mm/h → couleur
-var STOPS=[[0.1,[156,200,255,0]],[0.3,[156,200,255,.55]],[1,[78,124,245,.7]],[4,[120,90,230,.78]],[8,[199,125,255,.82]],[15,[255,242,122,.9]],[40,[255,255,220,.95]]];
+var STOPS=[[0.1,[156,200,255,0]],[0.3,[156,200,255,.42]],[1,[78,124,245,.7]],[4,[120,90,230,.78]],[8,[199,125,255,.82]],[15,[255,242,122,.9]],[40,[255,255,220,.95]]];
 function color(v){
   if(v<STOPS[0][0])return null;
   for(var k=1;k<STOPS.length;k++){if(v<=STOPS[k][0]){var a=STOPS[k-1],b=STOPS[k],f=(v-a[0])/(b[0]-a[0]);return a[1].map(function(x,i){return x+(b[1][i]-x)*f})}}
@@ -104,15 +105,55 @@ function showTemps(t){
   for(var i=1;i<N;i+=3){for(var j=1;j<N;j+=3){if(Math.abs(i-c)<2&&Math.abs(j-c)<2)continue;var v=temps[i*N+j];if(v==null)continue;
     tempMarkers.push(L.marker([+lats[i*N+j],+lons[i*N+j]],{icon:L.divIcon({className:'',html:'<div class="temp">'+Math.round(v)+'</div>',iconSize:[34,34]}),interactive:false}).addTo(map));}}
 }
+// Les images RainViewer (palette « Universal Blue ») sont recolorées avec notre palette,
+// lissées (au-delà du zoom 7, le service ne fournit pas plus de détail) et le bruit très faible est retiré.
+var lut={};
+function rvIntensity(r,g,b,a){ // couleur RainViewer → intensité approximative en mm/h
+  var key=r+','+g+','+b+','+a;if(key in lut)return lut[key];
+  var mx=Math.max(r,g,b)/255,mn=Math.min(r,g,b)/255,l=(mx+mn)/2,h=0,d=mx-mn;
+  if(d>0){var R=r/255,G=g/255,B=b/255;h=mx===R?((G-B)/d)%6:mx===G?(B-R)/d+2:(R-G)/d+4;h*=60;if(h<0)h+=360}
+  var v;
+  if(a<250)v=0.06+a/190*0.26;                                  // échos très faibles (bruine)
+  else if(h>=170&&h<=230)v=0.5*Math.pow(24,Math.min(1,Math.max(0,(0.74-l)/0.54))); // bleus : faible → forte
+  else if(h>=15&&h<=70)v=12+(70-h)/55*25;                      // jaunes / orangés : très fortes
+  else v=45;                                                    // rouges, violets : intenses
+  return lut[key]=v;
+}
+var srcCache={};
+function recolored(url){
+  if(srcCache[url])return srcCache[url];
+  return srcCache[url]=new Promise(function(ok){
+    var im=new Image();im.crossOrigin='anonymous';
+    im.onload=function(){
+      var c=document.createElement('canvas');c.width=c.height=256;var x=c.getContext('2d');x.drawImage(im,0,0);
+      try{var d=x.getImageData(0,0,256,256),p=d.data;
+        for(var i=0;i<p.length;i+=4){if(!p[i+3])continue;var col=color(rvIntensity(p[i],p[i+1],p[i+2],p[i+3]));
+          if(!col){p[i+3]=0;continue}p[i]=col[0];p[i+1]=col[1];p[i+2]=col[2];p[i+3]=Math.round(col[3]*255)}
+        x.putImageData(d,0,0);}catch(e){}
+      ok(c)};
+    im.onerror=function(){ok(null)};im.src=url;
+  });
+}
+var RadarLayer=L.GridLayer.extend({
+  createTile:function(c,done){
+    var t=document.createElement('canvas');t.width=t.height=256;var path=this.options.path;
+    var z=Math.min(c.z,7),f=Math.pow(2,c.z-z),px=Math.floor(c.x/f),py=Math.floor(c.y/f),sub=256/f;
+    recolored(rvHost+path+'/256/'+z+'/'+px+'/'+py+'/2/1_0.png').then(function(src){
+      if(src){var x=t.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';
+        x.drawImage(src,(c.x%f)*sub,(c.y%f)*sub,sub,sub,0,0,256,256);}
+      done(null,t)});
+    return t;
+  }
+});
 function radarLayer(f){
-  if(!radarLayers[f.path])radarLayers[f.path]=L.tileLayer(rvHost+f.path+'/256/{z}/{x}/{y}/2/1_1.png',{opacity:0,maxNativeZoom:7,maxZoom:12,zIndex:10}).addTo(map);
+  if(!radarLayers[f.path])radarLayers[f.path]=new RadarLayer({path:f.path,opacity:0,maxZoom:12,zIndex:10,className:'radar'}).addTo(map);
   return radarLayers[f.path];
 }
 function show(i){
   var list=frames[mode];if(!list.length)return;index=i;var f=list[i];
   Object.keys(radarLayers).forEach(function(k){radarLayers[k].setOpacity(0)});
   if(overlay){map.removeLayer(overlay);overlay=null}
-  if(f.kind==='radar'){radarLayer(f).setOpacity(.8);if(list[i+1]&&list[i+1].kind==='radar')radarLayer(list[i+1]);}
+  if(f.kind==='radar'){radarLayer(f).setOpacity(.95);if(list[i+1]&&list[i+1].kind==='radar')radarLayer(list[i+1]);}
   else if(f.img){overlay=L.imageOverlay(f.img,bounds,{opacity:.95,className:'rain',interactive:false}).addTo(map);}
   showTemps(f.t);
   document.getElementById('slider').value=i;

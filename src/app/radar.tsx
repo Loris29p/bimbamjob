@@ -14,7 +14,7 @@ export default function Radar() {
     <View style={{ flex: 1, backgroundColor: '#0B1520' }}>
       <WebView
         originWhitelist={['*']}
-        source={{ html: radarHtml(p?.latitude ?? 46.6, p?.longitude ?? 2.4, true), baseUrl: 'https://localhost' }}
+        source={{ html: radarHtml(p?.latitude ?? 46.6, p?.longitude ?? 2.4, true, { top: insets.top, bottom: insets.bottom }), baseUrl: 'https://localhost' }}
         style={{ flex: 1, backgroundColor: '#0B1520' }}
       />
       <Pressable onPress={() => router.back()} style={[styles.close, { top: insets.top + 8 }]} hitSlop={10}>
