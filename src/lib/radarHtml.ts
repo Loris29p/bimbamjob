@@ -82,17 +82,27 @@ function color(v){
   for(var k=1;k<STOPS.length;k++){if(v<=STOPS[k][0]){var a=STOPS[k-1],b=STOPS[k],f=(v-a[0])/(b[0]-a[0]);return a[1].map(function(x,i){return x+(b[1][i]-x)*f})}}
   return STOPS[STOPS.length-1][1];
 }
-function render(values){ // values : N*N en mm/h
-  var S=240,c=document.createElement('canvas');c.width=S;c.height=S;var ctx=c.getContext('2d'),img=ctx.createImageData(S,S),any=false;
-  for(var y=0;y<S;y++){for(var x=0;x<S;x++){
-    var gy=y/(S-1)*(N-1),gx=x/(S-1)*(N-1),i0=Math.floor(gy),j0=Math.floor(gx),i1=Math.min(N-1,i0+1),j1=Math.min(N-1,j0+1),fy=gy-i0,fx=gx-j0;
-    var v=values[i0*N+j0]*(1-fx)*(1-fy)+values[i0*N+j1]*fx*(1-fy)+values[i1*N+j0]*(1-fx)*fy+values[i1*N+j1]*fx*fy;
-    var col=color(v);if(!col)continue;any=true;var p=(y*S+x)*4;img.data[p]=col[0];img.data[p+1]=col[1];img.data[p+2]=col[2];img.data[p+3]=Math.round(col[3]*255);
-  }}
-  ctx.putImageData(img,0,0);return any?c.toDataURL():null;
+// Intensité codée sur 0–255 (échelle logarithmique) et palette précalculée :
+// on mélange les VALEURS de pluie de deux images, puis on colorie une seule fois
+// (superposer deux images colorées faisait « clignoter » les couleurs).
+var LMIN=0.08,LMAX=60;
+function enc(v){return v<LMIN?0:Math.max(1,Math.min(255,Math.round(Math.log(v/LMIN)/Math.log(LMAX/LMIN)*254)+1))}
+function dec(l){return LMIN*Math.pow(LMAX/LMIN,(l-1)/254)}
+var PAL=new Uint8ClampedArray(1024);
+for(var l=1;l<256;l++){var cc=color(dec(l));if(cc){PAL[l*4]=cc[0];PAL[l*4+1]=cc[1];PAL[l*4+2]=cc[2];PAL[l*4+3]=Math.round(cc[3]*255)}}
+var FS=160,fcCanvas=document.createElement('canvas');fcCanvas.width=fcCanvas.height=FS;
+function renderForecast(A,B,k){ // A, B : N*N valeurs en mm/h
+  var ctx=fcCanvas.getContext('2d'),img=ctx.createImageData(FS,FS),d=img.data;
+  for(var y=0;y<FS;y++){var gy=y/(FS-1)*(N-1),i0=Math.floor(gy),i1=Math.min(N-1,i0+1),fy=gy-i0;
+    for(var x=0;x<FS;x++){var gx=x/(FS-1)*(N-1),j0=Math.floor(gx),j1=Math.min(N-1,j0+1),fx=gx-j0;
+      var w00=(1-fx)*(1-fy),w01=fx*(1-fy),w10=(1-fx)*fy,w11=fx*fy;
+      var v=A[i0*N+j0]*w00+A[i0*N+j1]*w01+A[i1*N+j0]*w10+A[i1*N+j1]*w11;
+      if(B&&k>0){var vb=B[i0*N+j0]*w00+B[i0*N+j1]*w01+B[i1*N+j0]*w10+B[i1*N+j1]*w11;v=v*(1-k)+vb*k}
+      var L=enc(v)*4;if(!L)continue;var o=(y*FS+x)*4;d[o]=PAL[L];d[o+1]=PAL[L+1];d[o+2]=PAL[L+2];d[o+3]=PAL[L+3];}}
+  ctx.putImageData(img,0,0);return fcCanvas.toDataURL();
 }
 
-var frames={'3h':[],'12h':[]}, mode='3h', tempMarkers=[], radarLayers={}, rvHost='';
+var frames={'3h':[],'12h':[]}, mode='3h', tempMarkers=[], rvHost='';
 var hourlyTemps=null, hourlyTimes=[];
 
 function tempsAt(t){ // températures de la grille à l'heure la plus proche
@@ -124,53 +134,59 @@ function rvIntensity(r,g,b,a){ // couleur RainViewer → intensité approximativ
   else v=45;                                                    // rouges, violets : intenses
   return lut[key]=v;
 }
-var srcCache={};
-function recolored(url){
-  if(srcCache[url])return srcCache[url];
-  return srcCache[url]=new Promise(function(ok){
+var levelCache={}; // url → Uint8Array(65536) des niveaux, ou null
+function levels(url){
+  if(url in levelCache)return levelCache[url] instanceof Promise?null:levelCache[url];
+  levelCache[url]=new Promise(function(ok){
     var im=new Image();im.crossOrigin='anonymous';
     im.onload=function(){
-      var c=document.createElement('canvas');c.width=c.height=256;var x=c.getContext('2d');x.drawImage(im,0,0);
-      try{var d=x.getImageData(0,0,256,256),p=d.data;
-        for(var i=0;i<p.length;i+=4){if(!p[i+3])continue;var col=color(rvIntensity(p[i],p[i+1],p[i+2],p[i+3]));
-          if(!col){p[i+3]=0;continue}p[i]=col[0];p[i+1]=col[1];p[i+2]=col[2];p[i+3]=Math.round(col[3]*255)}
-        x.putImageData(d,0,0);}catch(e){}
-      ok(c)};
-    im.onerror=function(){ok(null)};im.src=url;
+      var c=document.createElement('canvas');c.width=c.height=256;var x=c.getContext('2d'),out=new Uint8Array(65536);x.drawImage(im,0,0);
+      try{var p=x.getImageData(0,0,256,256).data;for(var i=0,j=0;i<p.length;i+=4,j++){if(p[i+3])out[j]=enc(rvIntensity(p[i],p[i+1],p[i+2],p[i+3]))}}catch(e){}
+      levelCache[url]=out;ok();field&&field.redrawAll();};
+    im.onerror=function(){levelCache[url]=null;ok()};im.src=url;
   });
+  return null;
 }
-var RadarLayer=L.GridLayer.extend({
-  createTile:function(c,done){
-    var t=document.createElement('canvas');t.width=t.height=256;var path=this.options.path;
-    var z=Math.min(c.z,7),f=Math.pow(2,c.z-z),px=Math.floor(c.x/f),py=Math.floor(c.y/f),sub=256/f;
-    recolored(rvHost+path+'/256/'+z+'/'+px+'/'+py+'/2/1_0.png').then(function(src){
-      if(src){var x=t.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';
-        x.drawImage(src,(c.x%f)*sub,(c.y%f)*sub,sub,sub,0,0,256,256);}
-      done(null,t)});
-    return t;
-  }
+function srcUrl(path,c){var z=Math.min(c.z,7),f=Math.pow(2,c.z-z);return rvHost+path+'/256/'+z+'/'+Math.floor(c.x/f)+'/'+Math.floor(c.y/f)+'/2/1_0.png'}
+var rs={a:null,b:null,k:0},blendCache={},scratch=document.createElement('canvas');scratch.width=scratch.height=256;
+function blended(c){ // tuile source (zoom ≤ 7) mélangée entre les images a et b, coloriée
+  var ua=srcUrl(rs.a,c),A=levels(ua);if(!A)return null;
+  var B=rs.b&&rs.k>0?levels(srcUrl(rs.b,c)):null,k=B?rs.k:0,key=ua+'|'+(B?rs.b:'')+'|'+Math.round(k*40);
+  if(blendCache[key])return blendCache[key];
+  var out=document.createElement('canvas');out.width=out.height=256;var ctx=out.getContext('2d'),img=ctx.createImageData(256,256),d=img.data;
+  for(var j=0;j<65536;j++){var L=B?Math.round(A[j]*(1-k)+B[j]*k):A[j];if(!L)continue;L*=4;var o=j*4;d[o]=PAL[L];d[o+1]=PAL[L+1];d[o+2]=PAL[L+2];d[o+3]=PAL[L+3]}
+  ctx.putImageData(img,0,0);return blendCache[key]=out;
+}
+var RadarField=L.GridLayer.extend({
+  createTile:function(c){var t=document.createElement('canvas');t.width=t.height=256;t._c=c;this.drawTile(t);return t},
+  drawTile:function(t){
+    var c=t._c,x=t.getContext('2d');x.clearRect(0,0,256,256);if(!rs.a)return;var src=blended(c);if(!src)return;
+    var z=Math.min(c.z,7),f=Math.pow(2,c.z-z),sub=256/f;x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';
+    x.drawImage(src,(c.x%f)*sub,(c.y%f)*sub,sub,sub,0,0,256,256);
+  },
+  redrawAll:function(){blendCache={};for(var k in this._tiles)this.drawTile(this._tiles[k].el)}
 });
-function radarLayer(f){
-  if(!radarLayers[f.path])radarLayers[f.path]=new RadarLayer({path:f.path,opacity:0,maxZoom:12,zIndex:10,className:'radar'}).addTo(map);
-  return radarLayers[f.path];
+var field=null;
+function preloadRadar(){ // charge toutes les images radar des tuiles visibles
+  if(!field)return;var list=frames['3h'].filter(function(f){return f.kind==='radar'});
+  for(var k in field._tiles){var c=field._tiles[k].coords;list.forEach(function(f){levels(srcUrl(f.path,c))})}
 }
-var STEPS=40, pos=0, shown=[], raf=null, lastTs=0;
-function layerOf(f){
-  if(f.kind==='radar')return radarLayer(f);
-  if(!f.img)return null;
-  if(!f.layer)f.layer=L.imageOverlay(f.img,bounds,{opacity:0,className:'rain',interactive:false}).addTo(map);
-  return f.layer;
-}
-function preload(list){list.forEach(function(f){layerOf(f)})} // toutes les images sont chargées d'avance
+var STEPS=40, pos=0, raf=null, lastTs=0, fcLayer=null, lastKey='';
 function show(p){
   var list=frames[mode];if(!list.length)return;
   pos=Math.max(0,Math.min(list.length-1,p));var i=Math.floor(pos),k=pos-i;if(i>=list.length-1){i=list.length-1;k=0}
-  var a=list[i],b=list[i+1],want=[];
-  // fondu enchaîné : l'image courante s'efface pendant que la suivante apparaît
-  var la=layerOf(a);if(la)want.push([la,.95*Math.min(1,2*(1-k))]); // pas de « creux » de couleur au milieu du fondu
-  if(b&&k>0){var lb=layerOf(b);if(lb)want.push([lb,.95*Math.min(1,2*k)])}
-  shown.forEach(function(l){if(!want.some(function(w){return w[0]===l}))l.setOpacity(0)});
-  want.forEach(function(w){w[0].setOpacity(w[1])});shown=want.map(function(w){return w[0]});
+  var a=list[i],b=list[i+1]&&k>0?list[i+1]:null;
+  var key=mode+i+'|'+Math.round(k*40);
+  if(key!==lastKey){lastKey=key;
+    var radarOp=0,fcOp=0,fa=null,fb=null,fk=0;
+    if(a.kind==='radar'){
+      if(b&&b.kind==='radar'){rs={a:a.path,b:b.path,k:k};radarOp=.95}
+      else{rs={a:a.path,b:null,k:0};radarOp=.95*(1-(b?k:0));if(b){fa=b.vals;fcOp=.95*k}}
+    }else{rs={a:null,b:null,k:0};fa=a.vals;fb=b?b.vals:null;fk=k;fcOp=.95}
+    if(field){field.setOpacity(radarOp);if(radarOp>0)field.redrawAll()}
+    if(fa&&fcOp>0){var url=renderForecast(fa,fb,fk);if(!fcLayer)fcLayer=L.imageOverlay(url,bounds,{className:'rain',interactive:false}).addTo(map);else fcLayer.setUrl(url);fcLayer.setOpacity(fcOp)}
+    else if(fcLayer)fcLayer.setOpacity(0);
+  }
   var t=b?a.t+(b.t-a.t)*k:a.t,cur=k<0.5||!b?a:b;
   showTemps(t);
   document.getElementById('slider').value=Math.round(pos*STEPS);
@@ -179,9 +195,8 @@ function show(p){
   document.getElementById('time').textContent=days[d.getDay()]+' '+hm(Math.round(t/60)*60)+(cur.empty?' · pas de pluie':'');
 }
 function setMode(m){
-  mode=m;stop();document.querySelectorAll('#modes button').forEach(function(b){b.className=b.dataset.m===m?'on':''});
-  shown.forEach(function(l){l.setOpacity(0)});shown=[];
-  var list=frames[m],s=document.getElementById('slider');s.max=Math.max(0,(list.length-1)*STEPS);preload(list);
+  mode=m;stop();lastKey='';document.querySelectorAll('#modes button').forEach(function(b){b.className=b.dataset.m===m?'on':''});
+  var list=frames[m],s=document.getElementById('slider');s.max=Math.max(0,(list.length-1)*STEPS);
   var now=Date.now()/1000,ni=0;list.forEach(function(f,k){if(f.t<=now+60)ni=k});
   var ticks=document.getElementById('ticks');ticks.innerHTML='';
   var n=5;for(var k=0;k<n;k++){var f=list[Math.round(k*(list.length-1)/(n-1))];if(!f)continue;var sp=document.createElement('span');sp.textContent=Math.abs(f.t-now)<450?'Maint.':(m==='12h'?hh(f.t):hm(f.t));ticks.appendChild(sp)}
@@ -210,8 +225,8 @@ var forecast=fetch(url).then(function(r){if(!r.ok)throw new Error(r.status);retu
   if(!Array.isArray(arr))arr=[arr];
   var q=arr[0].minutely_15.time, h=arr[0].hourly.time;
   hourlyTimes=h;hourlyTemps=arr.map(function(p){return p.hourly.temperature_2m});
-  var quarter=q.map(function(t,k){var v=arr.map(function(p){return (p.minutely_15.precipitation[k]||0)*4});var img=render(v);return{kind:'fc',t:t,img:img,empty:!img}});
-  var hourly=h.map(function(t,k){var v=arr.map(function(p){return p.hourly.precipitation[k]||0});var img=render(v);return{kind:'fc',t:t,img:img,empty:!img}});
+  var quarter=q.map(function(t,k){var v=arr.map(function(p){return (p.minutely_15.precipitation[k]||0)*4});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
+  var hourly=h.map(function(t,k){var v=arr.map(function(p){return p.hourly.precipitation[k]||0});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
   return{quarter:quarter,hourly:hourly};
 }).catch(function(){return null});
 
@@ -226,6 +241,7 @@ Promise.all([forecast,radar]).then(function(res){
   frames['12h']=fc?fc.hourly:[];
   if(!frames['3h'].length&&!frames['12h'].length){msg('Carte indisponible pour le moment');document.getElementById('title').textContent='Indisponible';return}
   if(!fc)msg('Prévision indisponible : radar seulement');else if(!past.length)msg('Radar indisponible : prévision seulement');
+  if(past.length){field=new RadarField({opacity:0,maxZoom:12,zIndex:10,className:'radar',updateWhenZooming:false}).addTo(map);map.on('moveend',preloadRadar);setTimeout(preloadRadar,50)}
   setMode(frames['3h'].length?'3h':'12h');
 });
 </script></body></html>`;
