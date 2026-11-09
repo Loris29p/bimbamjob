@@ -46,13 +46,13 @@ export default function Home() {
       <View pointerEvents="box-none" style={[styles.bar, { bottom: insets.bottom + 6 }]}>
         <Pressable onPress={() => router.push('/radar')} accessibilityLabel="Radar de pluie" style={styles.round}>
           <Material tint="systemChromeMaterialDark" interactive />
-          <Icon name={{ ios: 'map', android: 'map' }} size={22} />
+          <Icon name={{ ios: 'map', android: 'map' }} size={26} />
         </Pressable>
         <View style={styles.pill}>
           <Material tint="systemChromeMaterialDark" interactive />
           {places.map((p, i) =>
             p.isGps ? (
-              <Icon key={placeKey(p)} name={{ ios: 'location.fill', android: 'near_me' }} size={11} color={i === activeIndex ? '#fff' : 'rgba(255,255,255,0.45)'} />
+              <Icon key={placeKey(p)} name={{ ios: 'location.fill', android: 'near_me' }} size={14} color={i === activeIndex ? '#fff' : 'rgba(255,255,255,0.45)'} />
             ) : (
               <View key={placeKey(p)} style={[styles.dot, { opacity: i === activeIndex ? 1 : 0.45 }]} />
             ),
@@ -60,7 +60,7 @@ export default function Home() {
         </View>
         <Pressable onPress={() => router.push('/villes')} accessibilityLabel="Liste des villes" style={styles.round}>
           <Material tint="systemChromeMaterialDark" interactive />
-          <Icon name={{ ios: 'list.bullet', android: 'list' }} size={22} />
+          <Icon name={{ ios: 'list.bullet', android: 'list' }} size={26} />
         </Pressable>
       </View>
     </View>
@@ -76,7 +76,7 @@ const glass = {
 
 const styles = StyleSheet.create({
   bar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  round: { ...glass, width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  pill: { ...glass, height: 40, borderRadius: 20, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#fff' },
+  round: { ...glass, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  pill: { ...glass, height: 50, minWidth: 150, borderRadius: 25, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
 });

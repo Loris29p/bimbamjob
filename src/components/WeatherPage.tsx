@@ -24,7 +24,7 @@ import { ago, ObservationCard, pretty } from './ObservationCard';
 import { RainCard } from './RainCard';
 import { SkyBackground } from './SkyBackground';
 import { Tiles } from './Tiles';
-import { DIM, PinContext, T } from './ui';
+import { DIM, Icon, PinContext, T } from './ui';
 import { VigilanceBanner } from './VigilanceBanner';
 
 // Les types fournis par la bibliothèque datent d'avant React 19.
@@ -63,8 +63,13 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
   const bigOpacity = scrollY.interpolate({ inputRange: [0, 110], outputRange: [1, 0], extrapolate: 'clamp' });
   const compactOpacity = scrollY.interpolate({ inputRange: [90, 140], outputRange: [0, 1], extrapolate: 'clamp' });
   const headerShift = scrollY.interpolate({ inputRange: [-100, 0, 160], outputRange: [40, 0, 90], extrapolate: 'clamp' });
-  // Zone de l'en-tête compact : une fois repliée, les cartes passent DESSOUS (masquées) au lieu de la recouvrir.
-  const compactHeight = insets.top + 62;
+  // Le nom de la ville reste en place en haut (comme l'app Météo d'iOS) ; la grande température
+  // défile et s'efface, puis la ligne « 10° | Bruine » apparaît sous le nom.
+  const showPos = !!place.isGps && place.name !== 'Ma position';
+  const NAME_TOP = 6;
+  const nameBlock = (showPos ? POS_H : 0) + CITY_H;
+  // Zone de l'en-tête replié : les cartes passent DESSOUS (masquées) au lieu de la recouvrir.
+  const compactHeight = insets.top + NAME_TOP + nameBlock + LINE_H + 12;
   const maskTop = scrollY.interpolate({ inputRange: [70, 140], outputRange: [1, 0], extrapolate: 'clamp' });
   const [mode, setMode] = useState<Mode>('temp');
   const contentRef = useRef<HostInstance>(null);
@@ -97,20 +102,20 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
       >
         <PinContext.Provider value={pin}>
         {/* la marge du haut est DANS la vue mesurée, pour que la position des cartes soit exacte */}
-        <View ref={contentRef} collapsable={false} style={{ paddingTop: insets.top + 24 }} onLayout={() => setLayoutVersion((v) => v + 1)}>
+        <View ref={contentRef} collapsable={false} style={{ paddingTop: insets.top + NAME_TOP + nameBlock }} onLayout={() => setLayoutVersion((v) => v + 1)}>
         <Animated.View style={[styles.header, { opacity: bigOpacity, transform: [{ translateY: headerShift }] }]}>
-          {place.isGps && place.name !== 'Ma position' ? <T style={styles.myPos}>MA POSITION</T> : null}
-          <T style={styles.city} numberOfLines={1}>
-            {place.name}
-          </T>
           {c ? (
             <>
               <T style={styles.temp}>{temp(shownTemp ?? c.temperature)}</T>
               <T style={styles.cond}>{weatherLabel(c.weatherCode, c.isDay)}</T>
               {today ? (
-                <T style={styles.hilo}>
-                  Max. {temp(today.tMax)}  Min. {temp(today.tMin)}
-                </T>
+                <View style={styles.hiloRow}>
+                  <Icon name={{ ios: 'arrow.up', android: 'arrow_upward' }} size={17} />
+                  <T style={styles.hilo}>{temp(today.tMax)}</T>
+                  <View style={{ width: 10 }} />
+                  <Icon name={{ ios: 'arrow.down', android: 'arrow_downward' }} size={17} />
+                  <T style={styles.hilo}>{temp(today.tMin)}</T>
+                </View>
               ) : null}
               {useObs ? <T style={styles.measured}>{`Mesurée à ${pretty(obs!.station.name)} · ${ago(obs!.time)}`}</T> : null}
             </>
@@ -146,28 +151,43 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
       </Animated.ScrollView>
       </MaskedView>
 
-      {/* En-tête compact qui apparaît quand on fait défiler */}
-      <Animated.View pointerEvents="none" style={[styles.compact, { paddingTop: insets.top + 6, opacity: compactOpacity }]}>
-        <T style={styles.compactCity} numberOfLines={1}>
+      {/* Nom du lieu, fixe en haut ; « 10° | Bruine » apparaît dessous quand on fait défiler */}
+      <View pointerEvents="none" style={[styles.compact, { paddingTop: insets.top + NAME_TOP }]}>
+        {showPos ? (
+          <View style={styles.posRow}>
+            <Icon name={{ ios: 'location.fill', android: 'near_me' }} size={12} />
+            <T style={styles.myPos}>MA POSITION</T>
+          </View>
+        ) : null}
+        <T style={styles.city} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
           {place.name}
         </T>
-        {c ? <T style={styles.compactLine}>{`${temp(shownTemp ?? c.temperature)} · ${weatherLabel(c.weatherCode, c.isDay)}`}</T> : null}
-      </Animated.View>
+        {c ? (
+          <Animated.Text style={[styles.compactLine, { opacity: compactOpacity }]}>
+            {`${temp(shownTemp ?? c.temperature)}  |  ${weatherLabel(c.weatherCode, c.isDay)}`}
+          </Animated.Text>
+        ) : null}
+      </View>
     </View>
   );
 }
 
+const POS_H = 18;
+const CITY_H = 42;
+const LINE_H = 26;
+
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', marginBottom: 28 },
-  myPos: { fontSize: 13, fontWeight: '600', letterSpacing: 0.4 },
-  city: { fontSize: 34, fontWeight: '400', marginTop: 2, textShadowColor: 'rgba(0,0,0,0.12)', textShadowRadius: 6 },
+  header: { alignItems: 'center', marginBottom: 56 },
+  posRow: { height: POS_H, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  myPos: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
+  city: { height: CITY_H, fontSize: 34, lineHeight: CITY_H, fontWeight: '400', paddingHorizontal: 20, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.12)', textShadowRadius: 6 },
   temp: { fontSize: 102, fontWeight: '100', lineHeight: 112, marginLeft: 26, fontVariant: ['tabular-nums'], textShadowColor: 'rgba(0,0,0,0.12)', textShadowRadius: 8 },
   cond: { fontSize: 20, fontWeight: '500' },
-  hilo: { fontSize: 20, fontWeight: '500', marginTop: 2, fontVariant: ['tabular-nums'] },
+  hiloRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  hilo: { fontSize: 20, fontWeight: '500', fontVariant: ['tabular-nums'] },
   retry: { marginTop: 30, padding: 16 },
   measured: { fontSize: 12, color: DIM, marginTop: 6 },
   compact: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 10 },
-  compactCity: { fontSize: 22, fontWeight: '600' },
-  compactLine: { fontSize: 15, color: DIM, fontWeight: '500' },
+  compactLine: { height: LINE_H, fontSize: 20, lineHeight: LINE_H, color: '#fff', fontWeight: '500', fontVariant: ['tabular-nums'] },
   source: { fontSize: 12, color: DIM, textAlign: 'center', marginTop: 8 },
 });

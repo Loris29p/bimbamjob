@@ -53,7 +53,8 @@ export function DailyCard({ daily, hourly, currentTemp, mode = 'temp' }: { daily
   const maxWind = Math.max(20, ...hourly.map((h) => h.windGusts));
 
   return (
-    <Glass title={`Prévisions sur ${daily.length} jours`} icon={{ ios: 'calendar', android: 'calendar_month' }}>
+    // Liste des jours sans titre, comme l'app Météo d'iOS
+    <Glass style={styles.card}>
       {daily.map((d, i) => {
         const prob = d.precipitationProbability ?? 0;
         const hours = hoursOfDay(hourly, startOfDay(d.time)).slice(0, 24);
@@ -77,9 +78,10 @@ export function DailyCard({ daily, hourly, currentTemp, mode = 'temp' }: { daily
             ) : (
               <>
                 <View style={styles.iconBox}>
-                  <Icon name={symbolFor(d.weatherCode)} size={24} multicolor />
+                  <Icon name={symbolFor(d.weatherCode)} size={26} multicolor />
                   {prob >= 30 ? <T style={styles.prob}>{Math.round(prob / 10) * 10} %</T> : null}
                 </View>
+                <View style={{ flex: 1 }} />
                 <T style={styles.min}>{temp(d.tMin)}</T>
                 <View style={styles.track}>
                   <LinearGradient
@@ -96,29 +98,26 @@ export function DailyCard({ daily, hourly, currentTemp, mode = 'temp' }: { daily
           </View>
         );
       })}
-      <T style={styles.note}>
-        {daily.filter((d) => d.meteoFrance).length} premiers jours : modèles Météo-France. Au-delà : tendance (ECMWF), moins fiable.
-      </T>
     </Glass>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', height: 52, gap: 8 },
+  card: { paddingVertical: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', height: 48, gap: 8 },
   border: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LINE },
-  day: { width: 50, fontSize: 20, fontWeight: '500', letterSpacing: 0.38 },
-  iconBox: { width: 40, alignItems: 'center' },
-  prob: { color: RAIN_BLUE, fontSize: 11, fontWeight: '700' },
-  min: { width: 38, textAlign: 'right', fontSize: 20, fontWeight: '500', color: DIM, fontVariant: ['tabular-nums'] },
-  track: { flex: 1, height: 5, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.18)' },
+  day: { width: 76, fontSize: 20, fontWeight: '500', letterSpacing: 0.38 },
+  iconBox: { width: 54, alignItems: 'center' },
+  prob: { color: '#5AC8FA', fontSize: 13, fontWeight: '600', marginTop: 1 },
+  min: { width: 40, textAlign: 'right', fontSize: 20, fontWeight: '500', color: DIM, fontVariant: ['tabular-nums'] },
+  track: { width: 96, height: 5, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.18)', marginHorizontal: 6 },
   range: { position: 'absolute', top: 0, bottom: 0, borderRadius: 3 },
   now: { position: 'absolute', top: -1.5, width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.25)' },
-  max: { width: 38, fontSize: 20, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  max: { width: 40, textAlign: 'right', fontSize: 20, fontWeight: '500', fontVariant: ['tabular-nums'] },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 24 },
   barSlot: { width: 7, height: 24, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'flex-end', overflow: 'hidden' },
   barFill: { backgroundColor: RAIN_BLUE, borderRadius: 2 },
   mm: { flex: 1, textAlign: 'right', fontSize: 17, fontWeight: '500' },
   pct: { width: 54, textAlign: 'right', fontSize: 16, fontWeight: '600' },
   windRange: { flex: 1, textAlign: 'right', fontSize: 17, fontWeight: '500' },
-  note: { fontSize: 11.5, color: DIM, marginTop: 8 },
 });

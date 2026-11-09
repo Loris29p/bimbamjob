@@ -3,36 +3,17 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { upcomingHours, upcomingMinutely, type DayPoint, type HourPoint, type Minutely } from '../lib/forecast';
 import { hour, temp, time } from '../lib/format';
+
+const SUBTITLE: Record<Mode, string> = { temp: 'Température (°C)', rain: 'Précipitations (mm)', wind: 'Vent (km/h)' };
+// bleu des probabilités de pluie (iOS)
+const PROB = '#5AC8FA';
 import { symbolFor } from '../lib/sky';
-import { isRainy, weatherLabel, windDirection } from '../lib/weatherCodes';
+import { windDirection } from '../lib/weatherCodes';
 import { tick } from '../lib/hig';
 import { DIM, Glass, Icon, RAIN_BLUE, T } from './ui';
 
 export type Mode = 'temp' | 'rain' | 'wind';
 type Item = { kind: 'hour'; h: HourPoint; first: boolean } | { kind: 'sun'; time: number; rise: boolean };
-
-/** Phrase de synthèse pour les prochaines heures. */
-function summary(hours: HourPoint[]) {
-  const next = hours.slice(0, 24);
-  const rainIdx = next.findIndex((h) => isRainy(h.weatherCode) || (h.precipitationProbability ?? 0) >= 60);
-  const gust = Math.max(...next.map((h) => h.windGusts));
-  const parts: string[] = [];
-  if (rainIdx === 0) {
-    const stop = next.findIndex((h) => !isRainy(h.weatherCode) && h.precipitation < 0.1);
-    parts.push(stop > 0 ? `Pluie jusqu'à ${hour(next[stop].time)} environ.` : 'Temps pluvieux ces prochaines heures.');
-  } else if (rainIdx > 0) {
-    const h = next[rainIdx];
-    parts.push(
-      isRainy(h.weatherCode)
-        ? `${weatherLabel(h.weatherCode)} vers ${hour(h.time)}.`
-        : `Risque de pluie de ${Math.round((h.precipitationProbability ?? 0) / 10) * 10} % vers ${hour(h.time)}.`,
-    );
-  } else {
-    parts.push(`${weatherLabel(next[Math.min(2, next.length - 1)].weatherCode, next[0].isDay)} pour les prochaines heures, sans pluie prévue.`);
-  }
-  if (gust >= 50) parts.push(`Rafales jusqu'à ${Math.round(gust)} km/h.`);
-  return parts.join(' ');
-}
 
 const MODES: { id: Mode; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { id: 'temp', label: 'Températures', icon: { ios: 'cloud.sun.fill', android: 'partly_cloudy_day' } },
@@ -63,17 +44,24 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
     <Glass>
       <View style={styles.top}>
         <Pressable style={{ flex: 1 }} onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
-          <T style={styles.summary}>{summary(hours)}</T>
+          <T style={styles.title}>Conditions météo</T>
+          <T style={styles.subtitle}>{quarter ? 'Toutes les 15 min (AROME)' : SUBTITLE[mode]}</T>
         </Pressable>
         <View style={styles.modes}>
-          {MODES.map((m) => (
-            <Pressable key={m.id} onPress={() => { if (m.id !== mode) tick(); setMode(m.id); }} accessibilityRole="button" accessibilityLabel={m.label} style={[styles.mode, mode === m.id && styles.modeOn]} hitSlop={4}>
-              <Icon name={m.icon} size={15} />
-            </Pressable>
-          ))}
+          {MODES.map((m, i) => {
+            // fin trait entre deux icônes non sélectionnées
+            const sep = i > 0 && mode !== m.id && mode !== MODES[i - 1].id;
+            return (
+              <View key={m.id} style={styles.modeWrap}>
+                {sep ? <View style={styles.modeSep} /> : null}
+                <Pressable onPress={() => { if (m.id !== mode) tick(); setMode(m.id); }} accessibilityRole="button" accessibilityLabel={m.label} accessibilityState={{ selected: mode === m.id }} style={[styles.mode, mode === m.id && styles.modeOn]} hitSlop={4}>
+                  <Icon name={m.icon} size={17} />
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
       </View>
-      <View style={styles.sep} />
       {quarter && quarters.length ? (
         <QuarterStrip quarters={quarters} mode={mode} />
       ) : (
@@ -128,22 +116,13 @@ export function HourlyCard({ hourly, daily, minutely, mode, onMode: setMode }: {
         })}
       </ScrollView>
       )}
-      <View style={styles.bottom}>
-        <T style={styles.unit}>
-          {quarter
-            ? 'Toutes les 15 min · modèle AROME 1,3 km (Météo-France)'
-            : mode === 'rain'
-              ? 'Pluie en mm/h · risque en %'
-              : mode === 'wind'
-                ? 'Vent et rafales en km/h'
-                : ' '}
-        </T>
-        {quarters.length ? (
+      {quarters.length ? (
+        <View style={styles.bottom}>
           <Pressable onPress={() => { tick(); setQuarter((q) => !q); }} style={[styles.chip, quarter && styles.modeOn]} hitSlop={6}>
             <T style={{ fontSize: 12, fontWeight: '700' }}>15 min</T>
           </Pressable>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </Glass>
   );
 }
@@ -195,22 +174,23 @@ function QuarterStrip({ quarters, mode }: { quarters: Minutely; mode: Mode }) {
 }
 
 const styles = StyleSheet.create({
-  bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  bottom: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
   chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.18)' },
-  top: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  summary: { fontSize: 15, lineHeight: 20, letterSpacing: -0.24 },
-  modes: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 16, padding: 2 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  title: { fontSize: 17, fontWeight: '600', letterSpacing: -0.4 },
+  subtitle: { fontSize: 14, color: DIM, marginTop: 1 },
+  modes: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.16)', borderRadius: 20, padding: 3 },
+  modeWrap: { flexDirection: 'row', alignItems: 'center' },
+  modeSep: { width: StyleSheet.hairlineWidth, height: 18, backgroundColor: 'rgba(255,255,255,0.35)' },
   mode: { width: 40, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  modeOn: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 12 },
-  col: { width: 54, alignItems: 'center' },
-  hour: { fontSize: 15, fontWeight: '600', letterSpacing: -0.24 },
-  iconBox: { height: 52, alignItems: 'center', justifyContent: 'center' },
-  prob: { color: RAIN_BLUE, fontSize: 11, fontWeight: '700', marginTop: 2 },
+  modeOn: { width: 48, backgroundColor: 'rgba(255,255,255,0.2)' },
+  col: { width: 52, alignItems: 'center' },
+  hour: { fontSize: 16, fontWeight: '600', letterSpacing: -0.3 },
+  iconBox: { height: 58, alignItems: 'center', justifyContent: 'center' },
+  prob: { color: PROB, fontSize: 13, fontWeight: '600', marginTop: 2 },
   value: { fontSize: 20, fontWeight: '500', letterSpacing: 0.38, fontVariant: ['tabular-nums'] },
   rainBar: { width: 14, borderRadius: 3, backgroundColor: RAIN_BLUE },
   smallBlue: { fontSize: 11, color: RAIN_BLUE, fontWeight: '600' },
   small: { fontSize: 11, color: DIM },
   sunLabel: { fontSize: 12, color: DIM, marginTop: 4 },
-  unit: { fontSize: 11, color: DIM, flex: 1 },
 });
