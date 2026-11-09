@@ -9,6 +9,9 @@ export function ago(unix: number) {
   return min < 60 ? `il y a ${min} min` : `il y a ${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
 }
 
+/** « ST-MAUR » → « St-Maur » */
+export const pretty = (name: string) => name.replace(/_/g, ' ').toLowerCase().replace(/(^|[\s-])\S/g, (c) => c.toUpperCase());
+
 export function ObservationCard({ obs }: { obs: Observation }) {
   const rows: [string, string][] = [];
   if (obs.temperature !== null) rows.push(['Température', `${obs.temperature.toFixed(1)}°`]);
@@ -24,8 +27,13 @@ export function ObservationCard({ obs }: { obs: Observation }) {
   return (
     <Glass title="Mesuré en ce moment" icon={{ ios: 'sensor.fill', android: 'sensors' }}>
       <T style={styles.station}>
-        Station Météo-France {obs.station.name} · {obs.distanceKm < 1 ? 'moins de 1' : Math.round(obs.distanceKm)} km · {ago(obs.time)}
+        Station Météo-France {pretty(obs.station.name)} · {obs.distanceKm < 1 ? 'moins de 1' : Math.round(obs.distanceKm)} km · {ago(obs.time)}
       </T>
+      {obs.windStation ? (
+        <T style={styles.station}>
+          Vent : station {pretty(obs.windStation.name)} · {Math.round(obs.windStation.distanceKm)} km
+        </T>
+      ) : null}
       {rows.map(([k, v], i) => (
         <View key={k} style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LINE }]}>
           <T style={{ fontSize: 15 }}>{k}</T>

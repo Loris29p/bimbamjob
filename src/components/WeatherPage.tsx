@@ -18,7 +18,7 @@ import { AirCard } from './AirCard';
 import { DailyCard } from './DailyCard';
 import { HourlyCard } from './HourlyCard';
 import { MoonCard } from './MoonCard';
-import { ago, ObservationCard } from './ObservationCard';
+import { ago, ObservationCard, pretty } from './ObservationCard';
 import { RainCard } from './RainCard';
 import { Tiles } from './Tiles';
 import { DIM, T } from './ui';
@@ -76,7 +76,7 @@ export function WeatherPage({ place, bottomInset }: { place: Place; bottomInset:
                   Max. {temp(today.tMax)}  Min. {temp(today.tMin)}
                 </T>
               ) : null}
-              {useObs ? <T style={styles.measured}>{`Mesurée à ${obs!.station.name} · ${ago(obs!.time)}`}</T> : null}
+              {useObs ? <T style={styles.measured}>{`Mesurée à ${pretty(obs!.station.name)} · ${ago(obs!.time)}`}</T> : null}
             </>
           ) : error ? (
             <Pressable onPress={refresh} style={styles.retry}>

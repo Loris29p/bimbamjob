@@ -10,7 +10,10 @@ const STATIONS_CACHE = 'mf-stations-v1';
 
 export type Station = { id: string; name: string; lat: number; lon: number; alt: number };
 
+type Measured = { value: number; station: Station; distanceKm: number; time: number };
+
 export type Observation = {
+  /** Station principale (celle qui donne la température) */
   station: Station;
   distanceKm: number;
   time: number; // unix (s)
@@ -22,6 +25,8 @@ export type Observation = {
   rain6min: number | null; // mm
   pressure: number | null; // hPa
   visibility: number | null; // m
+  /** Station utilisée pour le vent, si différente de la station principale */
+  windStation: { name: string; distanceKm: number } | null;
 };
 
 export const observationsAvailable = !!KEY;
@@ -73,8 +78,10 @@ const n = (v: unknown) => {
 };
 
 /**
- * Dernière mesure de la station la plus proche ayant de la température.
- * On ne garde que les stations à moins de 25 km et à moins de 300 m d'écart d'altitude.
+ * Combine les mesures récentes des stations Météo-France proches.
+ * Beaucoup de petites stations ne mesurent que la température et la pluie :
+ * chaque valeur est prise dans la station la plus proche qui la mesure.
+ * Stations retenues : moins de 25 km, moins de 300 m d'écart d'altitude, mesure de moins de 90 min.
  */
 export async function fetchNearestObservation(place: Place, placeAltitude?: number): Promise<Observation | null> {
   if (!KEY) return null;
@@ -82,36 +89,52 @@ export async function fetchNearestObservation(place: Place, placeAltitude?: numb
     .map((s) => ({ s, d: distanceKm(place.latitude, place.longitude, s.lat, s.lon) }))
     .filter(({ s, d }) => d <= 25 && (placeAltitude === undefined || !Number.isFinite(s.alt) || Math.abs(s.alt - placeAltitude) <= 300))
     .sort((a, b) => a.d - b.d)
-    .slice(0, 3);
+    .slice(0, 5);
 
-  for (const { s, d } of candidates) {
-    try {
-      const json = await (await get(`/station/infrahoraire-6m?id_station=${s.id}&format=json`)).json();
-      const rows: Record<string, unknown>[] = Array.isArray(json) ? json : json ? [json] : [];
-      const last = rows
-        .filter((r) => n(r.t) !== null)
-        .sort((a, b) => Date.parse(String(b.validity_time)) - Date.parse(String(a.validity_time)))[0];
-      if (!last) continue;
-      const t = n(last.t);
-      const ff = n(last.ff);
-      const fx = n(last.fxi10);
-      const p = n(last.pmer);
-      return {
-        station: s,
-        distanceKm: d,
-        time: Date.parse(String(last.validity_time)) / 1000,
-        temperature: t === null ? null : t - 273.15, // Kelvin → °C
-        humidity: n(last.u),
-        windSpeed: ff === null ? null : ff * 3.6, // m/s → km/h
-        windGusts: fx === null ? null : fx * 3.6,
-        windDirection: n(last.dd),
-        rain6min: n(last.rr_per),
-        pressure: p === null ? null : p / 100, // Pa → hPa
-        visibility: n(last.vv),
-      };
-    } catch {
-      // station suivante
+  const results = await Promise.all(
+    candidates.map(async ({ s, d }) => {
+      try {
+        const json = await (await get(`/station/infrahoraire-6m?id_station=${s.id}&format=json`)).json();
+        const rows: Record<string, unknown>[] = Array.isArray(json) ? json : json ? [json] : [];
+        const last = rows.sort((a, b) => Date.parse(String(b.validity_time)) - Date.parse(String(a.validity_time)))[0];
+        if (!last) return null;
+        const time = Date.parse(String(last.validity_time)) / 1000;
+        if (!Number.isFinite(time) || Date.now() / 1000 - time > 90 * 60) return null; // station en retard
+        return { s, d, time, row: last };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const ok = results.filter((r): r is NonNullable<typeof r> => r !== null);
+  if (!ok.length) return null;
+
+  const pickField = (key: string, convert: (v: number) => number = (v) => v): Measured | null => {
+    for (const r of ok) {
+      const v = n(r.row[key]);
+      if (v !== null) return { value: convert(v), station: r.s, distanceKm: r.d, time: r.time };
     }
-  }
-  return null;
+    return null;
+  };
+
+  const t = pickField('t', (k) => k - 273.15); // Kelvin → °C
+  const ff = pickField('ff', (v) => v * 3.6); // m/s → km/h
+  const main = t ?? ff;
+  if (!main) return null;
+  const sameWindStation = (m: Measured | null) => (m && m.station.id === ff?.station.id ? m.value : null);
+
+  return {
+    station: main.station,
+    distanceKm: main.distanceKm,
+    time: main.time,
+    temperature: t?.value ?? null,
+    humidity: pickField('u')?.value ?? null,
+    windSpeed: ff?.value ?? null,
+    windGusts: sameWindStation(pickField('fxi10', (v) => v * 3.6)),
+    windDirection: sameWindStation(pickField('dd')),
+    rain6min: pickField('rr_per')?.value ?? null,
+    pressure: pickField('pmer', (p) => p / 100)?.value ?? null, // Pa → hPa
+    visibility: pickField('vv')?.value ?? null,
+    windStation: ff && ff.station.id !== main.station.id ? { name: ff.station.name, distanceKm: ff.distanceKm } : null,
+  };
 }
