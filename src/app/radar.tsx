@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Icon } from '../components/ui';
@@ -10,11 +10,13 @@ export default function Radar() {
   const insets = useSafeAreaInsets();
   const { places, activeIndex } = usePlaces();
   const p = places[activeIndex];
+  // fond de carte clair ou sombre selon le réglage de l'iPhone
+  const dark = useColorScheme() !== 'light';
   return (
-    <View style={{ flex: 1, backgroundColor: '#0B1520' }}>
+    <View style={{ flex: 1, backgroundColor: dark ? '#0B1520' : '#EEF3F8' }}>
       <WebView
         originWhitelist={['*']}
-        source={{ html: radarHtml(p?.latitude ?? 46.6, p?.longitude ?? 2.4, true, { top: insets.top, bottom: insets.bottom }), baseUrl: 'https://localhost' }}
+        source={{ html: radarHtml(p?.latitude ?? 46.6, p?.longitude ?? 2.4, dark, { top: insets.top, bottom: insets.bottom }), baseUrl: 'https://localhost' }}
         style={{ flex: 1, backgroundColor: '#0B1520' }}
       />
       <Pressable onPress={() => router.back()} style={[styles.close, { top: insets.top + 8 }]} hitSlop={10}>

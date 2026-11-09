@@ -70,18 +70,24 @@ L.tileLayer('${labels}',{pane:'labels',maxZoom:12,maxNativeZoom:16}).addTo(map);
 var me=L.marker([LAT,LON],{icon:L.divIcon({className:'',html:'<div class="me"><div class="bubble" id="meT">–</div><div class="dot"></div></div>',iconSize:[60,80],iconAnchor:[30,78]}),interactive:false,zIndexOffset:1000}).addTo(map);
 document.getElementById('locate').onclick=function(){map.setView([LAT,LON],9);};
 
-// ---- Grille de prévision AROME ----
-var N=13, DLAT=1.1, DLON=1.6;
-var lats=[],lons=[];
-for(var i=0;i<N;i++){for(var j=0;j<N;j++){lats.push((LAT+DLAT-2*DLAT*i/(N-1)).toFixed(3));lons.push((LON-DLON+2*DLON*j/(N-1)).toFixed(3));}}
-var bounds=[[LAT-DLAT,LON-DLON],[LAT+DLAT,LON+DLON]];
+// ---- Grille de prévision AROME : couvre la zone affichée (+ marge), recalculée quand on bouge ----
+var N=15, lats=[], lons=[], bounds=null;
+function makeGrid(b){ // b : L.LatLngBounds de la vue
+  var padLat=(b.getNorth()-b.getSouth())*0.2, padLon=(b.getEast()-b.getWest())*0.2;
+  var n=Math.min(51.5,b.getNorth()+padLat), s=Math.max(41,b.getSouth()-padLat), w=Math.max(-6,b.getWest()-padLon), e=Math.min(10.5,b.getEast()+padLon);
+  if(n-s<0.6){var c=(n+s)/2;n=c+0.3;s=c-0.3} if(e-w<0.8){var m=(e+w)/2;e=m+0.4;w=m-0.4}
+  lats=[];lons=[];
+  for(var i=0;i<N;i++){for(var j=0;j<N;j++){lats.push((n-(n-s)*i/(N-1)).toFixed(3));lons.push((w+(e-w)*j/(N-1)).toFixed(3));}}
+  bounds=[[s,w],[n,e]];
+}
+makeGrid(map.getBounds());
 
 function pad(n){return(n<10?'0':'')+n}
 function hm(t){var d=new Date(t*1000);return pad(d.getHours())+':'+pad(d.getMinutes())}
 function hh(t){return new Date(t*1000).getHours()+' h'}
 
 // mm/h → couleur
-var STOPS=[[0.1,[156,200,255,0]],[0.3,[156,200,255,.42]],[1,[78,124,245,.7]],[4,[120,90,230,.78]],[8,[199,125,255,.82]],[15,[255,242,122,.9]],[40,[255,255,220,.95]]];
+var STOPS=[[0.1,[156,200,255,0]],[0.3,[140,190,255,.58]],[1,[78,124,245,.8]],[4,[120,90,230,.78]],[8,[199,125,255,.82]],[15,[255,242,122,.9]],[40,[255,255,220,.95]]];
 function color(v){
   if(v<STOPS[0][0])return null;
   for(var k=1;k<STOPS.length;k++){if(v<=STOPS[k][0]){var a=STOPS[k-1],b=STOPS[k],f=(v-a[0])/(b[0]-a[0]);return a[1].map(function(x,i){return x+(b[1][i]-x)*f})}}
@@ -118,10 +124,11 @@ var tempKey='';
 function nearestHour(t){var best=0;for(var k=0;k<hourlyTimes.length;k++){if(Math.abs(hourlyTimes[k]-t)<Math.abs(hourlyTimes[best]-t))best=k}return best}
 function showTemps(t){
   if(!hourlyTemps)return;var best=nearestHour(t),key=layer+best;if(key===tempKey)return;tempKey=key;
-  var temps=hourlyTemps.map(function(a){return a[best]}),c=Math.floor(N/2);
-  document.getElementById('meT').textContent=Math.round(temps[c*N+c])+'°';
+  var temps=hourlyTemps.map(function(a){return a[best]}),c=Math.floor(N/2),mi=0,md=1e9;
+  for(var q=0;q<lats.length;q++){var dd=Math.pow(lats[q]-LAT,2)+Math.pow(lons[q]-LON,2);if(dd<md){md=dd;mi=q}}
+  document.getElementById('meT').textContent=Math.round(temps[mi])+'°';
   if(!tempMarkers.length){
-    for(var i=1;i<N;i+=3){for(var j=1;j<N;j+=3){if(Math.abs(i-c)<2&&Math.abs(j-c)<2)continue;
+    for(var i=1;i<N;i+=3){for(var j=1;j<N;j+=3){if(Math.abs(i-c)<1&&Math.abs(j-c)<1)continue;
       var m=L.marker([+lats[i*N+j],+lons[i*N+j]],{icon:L.divIcon({className:'',html:'<div class="temp"></div>',iconSize:[34,34]}),interactive:false}).addTo(map);m.idx=i*N+j;tempMarkers.push(m);}}
   }
   tempMarkers.forEach(function(m){var el=m.getElement();if(!el||!el.firstChild)return;var d=el.firstChild,k=m.idx;
@@ -285,27 +292,49 @@ document.getElementById('layersBtn').onclick=function(){var m=document.getElemen
 document.querySelectorAll('#layers button').forEach(function(b){b.onclick=function(){setLayer(b.dataset.l)}});
 function msg(t){var m=document.getElementById('msg');m.style.display=t?'block':'none';m.textContent=t||''}
 
-var url='https://api.open-meteo.com/v1/forecast?latitude='+lats.join(',')+'&longitude='+lons.join(',')+
-  '&models=meteofrance_seamless&timeformat=unixtime&minutely_15=precipitation&forecast_minutely_15=12&hourly=precipitation,temperature_2m,wind_speed_10m,wind_direction_10m&forecast_hours=13';
-var forecast=fetch(url).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(arr){
-  if(!Array.isArray(arr))arr=[arr];
-  var q=arr[0].minutely_15.time, h=arr[0].hourly.time;
-  hourlyTimes=h;hourlyTemps=arr.map(function(p){return p.hourly.temperature_2m});
-  hourlyWind=arr.map(function(p){return p.hourly.wind_speed_10m||[]});hourlyDir=arr.map(function(p){return p.hourly.wind_direction_10m||[]});
-  var quarter=q.map(function(t,k){var v=arr.map(function(p){return (p.minutely_15.precipitation[k]||0)*4});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
-  var hourly=h.map(function(t,k){var v=arr.map(function(p){return p.hourly.precipitation[k]||0});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
-  return{quarter:quarter,hourly:hourly};
-}).catch(function(){return null});
+function loadForecast(){
+  var url='https://api.open-meteo.com/v1/forecast?latitude='+lats.join(',')+'&longitude='+lons.join(',')+
+    '&models=meteofrance_seamless&timeformat=unixtime&minutely_15=precipitation&forecast_minutely_15=12&hourly=precipitation,temperature_2m,wind_speed_10m,wind_direction_10m&forecast_hours=13';
+  return fetch(url).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(arr){
+    if(!Array.isArray(arr))arr=[arr];
+    var q=arr[0].minutely_15.time, h=arr[0].hourly.time;
+    hourlyTimes=h;hourlyTemps=arr.map(function(p){return p.hourly.temperature_2m});
+    hourlyWind=arr.map(function(p){return p.hourly.wind_speed_10m||[]});hourlyDir=arr.map(function(p){return p.hourly.wind_direction_10m||[]});
+    hourlyAir=null;
+    var quarter=q.map(function(t,k){var v=arr.map(function(p){return (p.minutely_15.precipitation[k]||0)*4});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
+    var hourly=h.map(function(t,k){var v=arr.map(function(p){return p.hourly.precipitation[k]||0});return{kind:'fc',t:t,vals:v,empty:!v.some(function(x){return x>=LMIN})}});
+    return{quarter:quarter,hourly:hourly};
+  }).catch(function(){return null});
+}
+var forecast=loadForecast(), pastFrames=[];
+function applyForecast(fc){
+  var now=Date.now()/1000;
+  var future=fc?fc.quarter.filter(function(f){return f.t>(pastFrames.length?pastFrames[pastFrames.length-1].t:now-900)}):[];
+  frames['3h']=pastFrames.concat(future);
+  frames['12h']=fc?fc.hourly:[];
+}
+// Quand on déplace / zoome nettement, on recalcule la prévision pour la nouvelle zone.
+var reloadTimer=null, reloading=false;
+map.on('moveend',function(){
+  if(!bounds||reloading)return;var v=map.getBounds(),B=L.latLngBounds(bounds);
+  var spanNow=v.getNorth()-v.getSouth(),spanGrid=B.getNorth()-B.getSouth();
+  if(B.contains(v)&&spanNow>spanGrid*0.35)return; // la zone visible est déjà couverte, à une échelle adaptée
+  clearTimeout(reloadTimer);
+  reloadTimer=setTimeout(function(){
+    reloading=true;makeGrid(map.getBounds());
+    tempMarkers.forEach(function(m){map.removeLayer(m)});tempMarkers=[];tempKey='';
+    loadForecast().then(function(fc){reloading=false;if(!fc)return;msg('');applyForecast(fc);if(fcLayer)fcLayer.setBounds(L.latLngBounds(bounds));lastKey='';var keep=pos;setMode(mode);show(Math.min(keep,frames[mode].length-1));
+      if(layer==='air')loadAir().then(function(){lastKey='';tempKey='';show(pos)})});
+  },600);
+});
 
 var radar=fetch('https://api.rainviewer.com/public/weather-maps.json').then(function(r){return r.json()}).then(function(d){
   rvHost=d.host;return((d.radar&&d.radar.past)||[]).map(function(f){return{kind:'radar',t:f.time,path:f.path}});
 }).catch(function(){return[]});
 
 Promise.all([forecast,radar]).then(function(res){
-  var fc=res[0],past=res[1],now=Date.now()/1000;
-  var future=fc?fc.quarter.filter(function(f){return f.t>(past.length?past[past.length-1].t:now-900)}):[];
-  frames['3h']=past.concat(future);
-  frames['12h']=fc?fc.hourly:[];
+  var fc=res[0],past=res[1];pastFrames=past;
+  applyForecast(fc);
   if(!frames['3h'].length&&!frames['12h'].length){msg('Carte indisponible pour le moment');document.getElementById('title').textContent='Indisponible';return}
   if(!fc)msg('Prévision indisponible : radar seulement');else if(!past.length)msg('Radar indisponible : prévision seulement');
   if(past.length){field=new RadarField({opacity:0,maxZoom:12,zIndex:10,className:'radar',updateWhenZooming:false}).addTo(map);map.on('moveend',preloadRadar);setTimeout(preloadRadar,50)}
