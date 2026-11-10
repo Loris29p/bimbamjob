@@ -45,7 +45,8 @@
         }
       ],
       "expo-notifications",
-      "expo-localization"
+      "expo-localization",
+      "expo-font"
     ],
     "scheme": "meteopluie",
     "owner": "loris29p",
