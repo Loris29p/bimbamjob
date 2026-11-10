@@ -44,7 +44,7 @@
     "ios:xcode": "expo prebuild --platform ios --clean && xed ios",
     "lint": "expo lint",
     "ios:device": "expo run:ios --device --configuration Release",
-    "update": "eas update --channel production --environment production"
+    "update": "npx -y eas-cli update --channel production --environment production"
   },
   "private": true
 }
