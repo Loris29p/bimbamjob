@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { PlaceProvider } from '../lib/PlaceContext';
+import { useOtaUpdates } from '../lib/useOtaUpdates';
 
 export default function RootLayout() {
+  useOtaUpdates();
   return (
     <PlaceProvider>
       <StatusBar style="light" />
