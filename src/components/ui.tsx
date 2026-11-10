@@ -10,6 +10,9 @@ import { Animated, Platform, StyleSheet, Text, View, type HostInstance, type Sty
 export type PinInfo = { scrollY: Animated.Value; top: number; content: RefObject<HostInstance | null>; version: number };
 export const PinContext = createContext<PinInfo | null>(null);
 
+/** Bloque les défilements parents (page, villes) pendant qu'un doigt parcourt un graphique. */
+export const ScrollLockContext = createContext<(locked: boolean) => void>(() => {});
+
 const LIQUID = Platform.OS === 'ios' && isLiquidGlassAvailable();
 const CARD_RADIUS = 22;
 

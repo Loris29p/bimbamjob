@@ -1,9 +1,9 @@
 // Écran principal : une page par lieu, on passe de l'une à l'autre en glissant.
 import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon, liquidGlass, Material } from '../components/ui';
+import { Icon, liquidGlass, Material, ScrollLockContext } from '../components/ui';
 import { WeatherPage } from '../components/WeatherPage';
 import { tick } from '../lib/hig';
 import { usePlaces } from '../lib/PlaceContext';
@@ -16,6 +16,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const { places, activeIndex, setActiveIndex } = usePlaces();
   const list = useRef<FlatList<Place>>(null);
+  const [locked, setLocked] = useState(false);
   const bottom = BAR + insets.bottom;
 
   // Quand on choisit une ville depuis la liste, on se place sur sa page.
@@ -25,8 +26,10 @@ export default function Home() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0B1520' }}>
+      <ScrollLockContext.Provider value={setLocked}>
       <FlatList
         ref={list}
+        scrollEnabled={!locked}
         data={places}
         horizontal
         pagingEnabled
@@ -41,6 +44,7 @@ export default function Home() {
         }}
         renderItem={({ item }) => <WeatherPage place={item} bottomInset={bottom} />}
       />
+      </ScrollLockContext.Provider>
 
       {/* Barre flottante : radar · pages · villes */}
       <View pointerEvents="box-none" style={[styles.bar, { bottom: insets.bottom + 6 }]}>

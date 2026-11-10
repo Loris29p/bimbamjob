@@ -3,7 +3,7 @@ import MaskedViewBase from '@react-native-masked-view/masked-view';
 import type { ComponentType, ReactNode } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, type HostInstance, Platform, Pressable, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { minutesUntilRain } from '../lib/forecast';
@@ -30,7 +30,7 @@ import { ago, ObservationCard, pretty } from './ObservationCard';
 import { RainCard } from './RainCard';
 import { SkyBackground } from './SkyBackground';
 import { Tiles } from './Tiles';
-import { DIM, Icon, PinContext, T } from './ui';
+import { DIM, Icon, PinContext, ScrollLockContext, T } from './ui';
 import { VigilanceBanner } from './VigilanceBanner';
 
 // Les types fournis par la bibliothèque datent d'avant React 19.
@@ -97,6 +97,13 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
   const compactHeight = insets.top + NAME_TOP + nameBlock + LINE_H + 12;
   const maskTop = scrollY.interpolate({ inputRange: [70, 140], outputRange: [1, 0], extrapolate: 'clamp' });
   const [mode, setMode] = useState<Mode>('temp');
+  // Doigt sur un graphique : on bloque le défilement de la page et celui entre les villes.
+  const lockParent = useContext(ScrollLockContext);
+  const [locked, setLocked] = useState(false);
+  const lock = useCallback((b: boolean) => {
+    setLocked(b);
+    lockParent(b);
+  }, [lockParent]);
   const contentRef = useRef<HostInstance>(null);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const pin = useMemo(() => ({ scrollY, top: compactHeight, content: contentRef, version: layoutVersion }), [scrollY, compactHeight, layoutVersion]);
@@ -119,12 +126,14 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
         }
       >
       <Animated.ScrollView
+        scrollEnabled={!locked}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: bottomInset + 24, paddingHorizontal: 16 }}
         refreshControl={<RefreshControl refreshing={loading && !!forecast} onRefresh={refresh} tintColor="#fff" />}
         showsVerticalScrollIndicator={false}
       >
+        <ScrollLockContext.Provider value={lock}>
         <PinContext.Provider value={pin}>
         {/* la marge du haut est DANS la vue mesurée, pour que la position des cartes soit exacte */}
         <View ref={contentRef} collapsable={false} style={{ paddingTop: insets.top + NAME_TOP + nameBlock }} onLayout={() => setLayoutVersion((v) => v + 1)}>
@@ -177,6 +186,7 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
         ) : null}
         </View>
         </PinContext.Provider>
+        </ScrollLockContext.Provider>
       </Animated.ScrollView>
       </MaskedView>
 

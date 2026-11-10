@@ -1,6 +1,6 @@
 // Carte « Pluie » : la réponse (parapluie ou pas), d'où elle vient, la courbe d'intensité sur 3 h
 // au quart d'heure (AROME, Météo-France) qu'on peut parcourir au doigt, et un rappel « préviens-moi ».
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { ActionSheetIOS, PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 import { upcomingMinutely, type Minutely } from '../lib/forecast';
@@ -11,7 +11,7 @@ import type { FusionInfo } from '../lib/rainFusion';
 import { windFrom } from '../lib/weatherCodes';
 import { HEAVY_MMH, INTENSITY_LABELS, MODERATE_MMH, RAIN_MMH, intensity } from '../lib/rain';
 import type { UmbrellaVerdict } from '../lib/umbrella';
-import { DIM, Glass, Icon, LINE, RAIN_BLUE, T } from './ui';
+import { DIM, Glass, Icon, LINE, RAIN_BLUE, ScrollLockContext, T } from './ui';
 
 const CHART_H = 96;
 const SLOTS = 12; // 3 h
@@ -70,6 +70,7 @@ function editAlerts(p: AlertPrefs) {
 
 export function RainCard({ verdict, minutely, placeName, placeId, info }: { verdict: UmbrellaVerdict; minutely: Minutely; placeName: string; placeId: string; info?: FusionInfo }) {
   const alerts = useAlertPrefs();
+  const lockScroll = useContext(ScrollLockContext);
   const [width, setWidth] = useState(0);
   const [pending, setPending] = useState<number | null>(null);
   const [scrub, setScrub] = useState<number | null>(null);
@@ -106,11 +107,14 @@ export function RainCard({ verdict, minutely, placeName, placeId, info }: { verd
     const toIndex = (x: number) => Math.max(0, Math.min(n - 1, Math.floor((x / Math.max(1, width)) * n)));
     return PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > Math.abs(g.dy),
+        onMoveShouldSetPanResponder: () => true,
+        // une fois le doigt posé sur la courbe, on ne le rend pas au défilement
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (e) => {
           const i = toIndex(e.nativeEvent.locationX);
           cur.last = i;
           tick();
+          lockScroll(true);
           setScrub(i);
         },
         onPanResponderMove: (e) => {
@@ -119,10 +123,16 @@ export function RainCard({ verdict, minutely, placeName, placeId, info }: { verd
           cur.last = i;
           setScrub(i);
         },
-        onPanResponderRelease: () => setScrub(null),
-        onPanResponderTerminate: () => setScrub(null),
+        onPanResponderRelease: () => {
+          lockScroll(false);
+          setScrub(null);
+        },
+        onPanResponderTerminate: () => {
+          lockScroll(false);
+          setScrub(null);
+        },
       });
-  }, [n, width]);
+  }, [n, width, lockScroll]);
 
   const onReminder = async () => {
     tap();
