@@ -1,8 +1,9 @@
 // Frise de lecture de la carte (lecture / pause, 3 h – 12 h, piste horaire), en natif
 // pour profiter du vrai « Liquid Glass » d'iOS 26 au-dessus de la carte (WebView).
+import { LinearGradient } from 'expo-linear-gradient';
 import { hourOf, timeOf as fmtTime } from '../lib/format';
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { tap, tick } from '../lib/hig';
 import { GlassFill, LAYER_NAMES, glassShadow, mapColors, type MapLayer } from './MapGlass';
 import { Icon } from './ui';
@@ -15,7 +16,10 @@ export type TimelineMeta = {
   grads: number[];
   nowF: number; // position de « maintenant » sur la piste
 };
-export type TimelinePos = { f: number; t: number; empty: boolean; playing: boolean; unavailable?: boolean };
+/** Source de l'image de pluie affichée : radar observé, radar prolongé (prévision immédiate) ou modèle AROME. */
+export type RainSource = 'radar' | 'nc' | 'arome' | '';
+export type TimelinePos = { f: number; t: number; empty: boolean; playing: boolean; src?: RainSource; unavailable?: boolean };
+const SOURCE_TITLES: Record<Exclude<RainSource, ''>, string> = { radar: 'Radar', nc: 'Radar prolongé', arome: 'Prévision AROME' };
 
 type Props = {
   dark: boolean;
@@ -48,7 +52,8 @@ function heading(layer: MapLayer, pos: TimelinePos | null) {
   if (pos.unavailable) return { title: 'Indisponible', sub: 'Réessaie dans quelques minutes' };
   const now = Date.now() / 1000;
   const d = new Date(pos.t * 1000);
-  const title = layer === 'rain' ? (pos.t < now - NEAR ? 'Précipitations passées' : 'Prévisions') : LAYER_NAMES[layer];
+  // Pluie : on dit d'où vient l'image (radar observé, radar prolongé ou modèle AROME)
+  const title = layer !== 'rain' ? LAYER_NAMES[layer] : pos.src ? SOURCE_TITLES[pos.src] : pos.t < now - NEAR ? 'Radar' : 'Prévision';
   // Près de « maintenant » : la date complète. Sinon l'heure EN PREMIER (avec une date courte),
   // pour qu'elle ne soit jamais coupée par le sélecteur 3 h / 12 h.
   if (Math.abs(pos.t - now) <= NEAR) return { title, sub: `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}` };
@@ -190,7 +195,57 @@ export function RadarTimeline({ dark, layer, meta, pos, bottom, onPlay, onMode, 
   );
 }
 
+// Légende de la pluie, avec les intensités en mm/h : mêmes seuils et mêmes couleurs que la
+// palette du moteur de la carte (STOPS / SNOW dans mapEngineHtml.ts). Rien n'est dessiné sous 0,2 mm/h.
+const RAIN_CLASSES = [
+  { label: 'Très fortes', value: '> 15' },
+  { label: 'Fortes', value: '7,6–15' },
+  { label: 'Modérées', value: '2,5–7,6' },
+  { label: 'Faibles', value: '0,2–2,5' },
+];
+const RAIN_COLORS: [string, string, ...string[]] = ['#FFF27A', '#C77DFF', '#7A5CF0', '#4E7CF5', '#8CBEFF'];
+const SNOW_COLORS: [string, string] = ['#FA82D7', '#F6E4FF'];
+
+/** Légende du calque « Précipitations » (les autres calques gardent GlassLegend). */
+export function RainLegend({ dark, style }: { dark: boolean; style?: StyleProp<ViewStyle> }) {
+  const c = mapColors(dark);
+  return (
+    <View style={[styles.legend, glassShadow, style]} pointerEvents="none">
+      <GlassFill dark={dark} radius={20} />
+      <Text style={[styles.legendTitle, { color: c.text }]}>
+        Précipitations <Text style={[styles.legendUnit, { color: c.sub }]}>mm/h</Text>
+      </Text>
+      <View style={[styles.legendLine, { backgroundColor: c.line }]} />
+      <View style={styles.legendRow}>
+        <LinearGradient colors={RAIN_COLORS} style={styles.legendBar} />
+        <View style={styles.legendLabels}>
+          {RAIN_CLASSES.map((k) => (
+            <Text key={k.label} style={[styles.legendLabel, { color: c.sub }]}>
+              {k.label} <Text style={[styles.legendValue, { color: c.text }]}>{k.value}</Text>
+            </Text>
+          ))}
+          <View style={styles.snowRow}>
+            <LinearGradient colors={SNOW_COLORS} style={styles.snowChip} />
+            <Text style={[styles.legendLabel, { color: c.sub }]}>Neige (radar)</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  legend: { borderRadius: 20, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14 },
+  legendTitle: { fontSize: 16, fontWeight: '600' },
+  legendUnit: { fontSize: 13, fontWeight: '500' },
+  legendLine: { height: StyleSheet.hairlineWidth, marginHorizontal: -14, marginTop: 10, marginBottom: 10 },
+  legendRow: { flexDirection: 'row', gap: 10 },
+  legendBar: { width: 4, borderRadius: 2, marginBottom: 30 },
+  legendLabels: { gap: 10, paddingVertical: 2 },
+  legendLabel: { fontSize: 14 },
+  legendValue: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  snowRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: -14, marginTop: 4 },
+  snowChip: { width: 4, height: 16, borderRadius: 2 },
   wrap: { position: 'absolute', left: 16, right: 16 },
   panel: { borderRadius: 32, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },

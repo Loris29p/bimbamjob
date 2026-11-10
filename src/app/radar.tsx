@@ -6,7 +6,7 @@ import MapView, { Marker, Overlay, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { GlassCircle, GlassLegend, GlassMenu, GlassNote, GlassPill, LAYER_NAMES, type MapLayer } from '../components/MapGlass';
-import { RadarTimeline, type TimelineMeta, type TimelinePos } from '../components/RadarTimeline';
+import { RadarTimeline, RainLegend, type TimelineMeta, type TimelinePos } from '../components/RadarTimeline';
 import { Icon } from '../components/ui';
 import { tick } from '../lib/hig';
 import { mapEngineHtml, type MapView4 } from '../lib/mapEngineHtml';
@@ -157,7 +157,12 @@ export default function Radar() {
       {menu ? <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenu(null)} accessibilityLabel="Fermer le menu" /> : null}
 
       <GlassCircle dark={dark} icon={{ ios: 'xmark', android: 'close' }} label="Fermer" onPress={() => router.back()} style={[styles.abs, { top, left: SIDE }]} />
-      <GlassLegend dark={dark} layer={layer} style={[styles.abs, { top: top + 48 + 14, left: SIDE }]} />
+      {/* Pluie : légende avec les intensités en mm/h ; autres calques : légende commune */}
+      {layer === 'rain' ? (
+        <RainLegend dark={dark} style={[styles.abs, { top: top + 48 + 14, left: SIDE }]} />
+      ) : (
+        <GlassLegend dark={dark} layer={layer} style={[styles.abs, { top: top + 48 + 14, left: SIDE }]} />
+      )}
       {note ? <GlassNote dark={dark} text={note} style={[styles.abs, { top: top + 6, left: SIDE + 60, right: SIDE + 60 }]} /> : null}
 
       <GlassPill

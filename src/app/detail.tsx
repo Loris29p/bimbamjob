@@ -14,6 +14,7 @@ import { usePlaces } from '../lib/PlaceContext';
 import { symbolFor } from '../lib/sky';
 import { useForecast } from '../lib/useForecast';
 import { uvLabel } from '../lib/weatherCodes';
+import { HEAVY_MMH, MODERATE_MMH, RAIN_MMH } from '../lib/rain';
 
 const LETTERS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -161,7 +162,7 @@ export default function Detail() {
     const gusts = Math.max(...hours.map((h) => h.windGusts));
     summary = `${isToday && Number.isFinite(nowVal) ? `Vent de ${fmt(nowVal)} en ce moment. ` : ''}Vent moyen ${span}, rafales jusqu’à ${Math.round(gusts)} km/h${gusts >= 60 ? ' : prudence' : ''}.`;
   } else if (metric === 'rain') {
-    const wet = hours.filter((h) => h.precipitation >= 0.1);
+    const wet = hours.filter((h) => h.precipitation >= RAIN_MMH);
     summary = wet.length ? `Pluie attendue de ${hour(wet[0].time)} à ${hour(wet[wet.length - 1].time + 3600)} environ, ${mmText(wet.reduce((a, h) => a + h.precipitation, 0))} au total.` : 'Pas de pluie significative prévue ce jour-là.';
   } else if (metric === 'uv') {
     summary = hiP.v < 3 ? 'Indice faible toute la journée, pas de protection particulière.' : `Indice maximal de ${Math.round(hiP.v)} vers ${hour(hiP.t)} : protection conseillée en milieu de journée.`;
@@ -226,7 +227,7 @@ export default function Detail() {
             formatY={(v) => (v === 0 ? '0' : `${v}`)}
             now={isToday ? nowSec : undefined}
             formatValue={(v) => `${v.toFixed(1)} mm/h · ${rainWord(v)}`}
-            bands={[{ from: 0.3, to: 2.5, label: 'Légère' }, { from: 2.5, to: 7.6, label: 'Modérée' }, { from: 7.6, to: 50, label: 'Forte' }].filter((b) => b.from < rainMax)}
+            bands={[{ from: RAIN_MMH, to: MODERATE_MMH, label: 'Légère' }, { from: MODERATE_MMH, to: HEAVY_MMH, label: 'Modérée' }, { from: HEAVY_MMH, to: 50, label: 'Forte' }].filter((b) => b.from < rainMax)}
           />
           <T style={styles.subTitle}>Risque de pluie</T>
           <Chart
@@ -277,13 +278,13 @@ export default function Detail() {
           <T style={styles.boxTitle}>Quantité heure par heure</T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {hours
-              .filter((h) => h.precipitation >= 0.1)
+              .filter((h) => h.precipitation >= RAIN_MMH)
               .map((h) => (
                 <T key={h.time} style={styles.chip}>
                   {hour(h.time)} : {h.precipitation.toFixed(1)} mm
                 </T>
               ))}
-            {hours.every((h) => h.precipitation < 0.1) ? <T style={{ color: DIM }}>Pas de pluie prévue ce jour-là.</T> : null}
+            {hours.every((h) => h.precipitation < RAIN_MMH) ? <T style={{ color: DIM }}>Pas de pluie prévue ce jour-là.</T> : null}
           </View>
         </View>
       ) : null}
@@ -414,9 +415,9 @@ function TopRow({ hours, metric, width, dayStart }: { hours: HourPoint[]; metric
 }
 
 function rainWord(mmh: number) {
-  if (mmh < 0.1) return 'sec';
-  if (mmh < 2.5) return 'pluie légère';
-  if (mmh < 7.6) return 'pluie modérée';
+  if (mmh < RAIN_MMH) return 'sec';
+  if (mmh < MODERATE_MMH) return 'pluie légère';
+  if (mmh < HEAVY_MMH) return 'pluie modérée';
   return 'forte pluie';
 }
 

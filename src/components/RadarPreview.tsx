@@ -11,6 +11,8 @@ async function latestRadar() {
   const d = await r.json();
   const past = d.radar?.past ?? [];
   const last = past[past.length - 1];
+  // Même source que la carte plein écran : palette 2 (« Universal Blue »), lissée, neige à part (1_1).
+  // Ici les couleurs sont celles de RainViewer (tuiles natives) ; la carte les recolore avec notre palette.
   return last ? `${d.host}${last.path}/256/{z}/{x}/{y}/2/1_1.png` : null;
 }
 

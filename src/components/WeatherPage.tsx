@@ -16,6 +16,8 @@ import { placeKey } from '../lib/types';
 import { useCached } from '../lib/useAsync';
 import { useForecast } from '../lib/useForecast';
 import { weatherLabel } from '../lib/weatherCodes';
+import { headerLabel } from '../lib/rain';
+import { umbrellaVerdict } from '../lib/umbrella';
 import { AirCard } from './AirCard';
 import { PageFooter, WindCard } from './DetailCards';
 import { RadarPreview } from './RadarPreview';
@@ -68,6 +70,9 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
     direction: windMeasured ? obs!.windDirection! : (c?.windDirection ?? 0),
     gusts: windMeasured && obs!.windGusts != null ? obs!.windGusts : (c?.windGusts ?? 0),
   };
+  // Réponse « parapluie » : mesure de station + prévision ; elle corrige aussi le libellé de l'en-tête.
+  const verdict = useMemo(() => (forecast ? umbrellaVerdict(forecast.minutely, forecast.hourly, place.name, obs) : null), [forecast, place.name, obs]);
+  const label = c ? headerLabel(weatherLabel(c.weatherCode, c.isDay), c.weatherCode, verdict ? verdict.now.wet : null, verdict?.now.mmh ?? 0, c.cloudCover) : '';
   const scrollY = useRef(new Animated.Value(0)).current;
   const bigOpacity = scrollY.interpolate({ inputRange: [0, 110], outputRange: [1, 0], extrapolate: 'clamp' });
   const compactOpacity = scrollY.interpolate({ inputRange: [90, 140], outputRange: [0, 1], extrapolate: 'clamp' });
@@ -116,7 +121,7 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
           {c ? (
             <>
               <T style={styles.temp}>{temp(shownTemp ?? c.temperature)}</T>
-              <T style={styles.cond}>{weatherLabel(c.weatherCode, c.isDay)}</T>
+              <T style={styles.cond}>{label}</T>
               {today ? (
                 <View style={styles.hiloRow}>
                   <Icon name={{ ios: 'arrow.up', android: 'arrow_upward' }} size={17} />
@@ -141,7 +146,7 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
         {forecast ? (
           <>
             <VigilanceBanner department={place.department} />
-            <RainCard minutely={forecast.minutely} hourly={forecast.hourly} placeName={place.name} placeId={placeKey(place)} />
+            {verdict ? <RainCard verdict={verdict} minutely={forecast.minutely} placeName={place.name} placeId={placeKey(place)} /> : null}
             <HourlyCard hourly={forecast.hourly} daily={forecast.daily} mode={mode} onMode={setMode} />
             <Pressable onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
               <DailyCard daily={forecast.daily} hourly={forecast.hourly} currentTemp={forecast.current.temperature} mode={mode} />
@@ -177,7 +182,7 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
         </T>
         {c ? (
           <Animated.Text style={[styles.compactLine, { opacity: compactOpacity }]}>
-            {`${temp(shownTemp ?? c.temperature)}  |  ${weatherLabel(c.weatherCode, c.isDay)}`}
+            {`${temp(shownTemp ?? c.temperature)}  |  ${label}`}
           </Animated.Text>
         ) : null}
       </View>

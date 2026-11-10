@@ -3,13 +3,22 @@
 //  - AROME + ARPEGE (« meteofrance_seamless ») pour les conditions actuelles, l'horaire et les 4 premiers jours ;
 //  - le meilleur modèle disponible (ECMWF…) pour ce que Météo-France ne fournit pas
 //    (probabilité de pluie, UV, visibilité) et pour la tendance jusqu'à 14 jours.
+import { RAIN_MMH } from './rain';
 import type { Place } from './types';
 
 const BASE = 'https://api.open-meteo.com/v1/forecast';
 
+// Pluie, neige, probabilité : chez Open-Meteo, la valeur datée t est la somme de la période QUI SE TERMINE à t.
+// Ici on la range au début de sa période : `precipitation` d'un point daté t = ce qui tombe entre t et t + 15 min
+// (ou t + 1 h pour l'horaire). Les autres valeurs (température, vent…) restent instantanées, à l'instant t.
 export type QuarterPoint = {
   time: number;
+  /** mm tombés entre `time` et `time` + 15 min */
   precipitation: number;
+  /** neige (cm) entre `time` et `time` + 15 min */
+  snowfall: number;
+  /** énergie convective (J/kg) : au-delà de ~800, risque d'orage si pluie */
+  cape: number | null;
   temperature: number | null;
   windSpeed: number | null;
   windGusts: number | null;
@@ -23,8 +32,12 @@ export type HourPoint = {
   time: number;
   temperature: number;
   apparent: number;
+  /** mm tombés entre `time` et `time` + 1 h */
   precipitation: number;
+  /** probabilité de pluie (> 0,1 mm) entre `time` et `time` + 1 h */
   precipitationProbability: number | null;
+  snowfall: number;
+  cape: number | null;
   weatherCode: number;
   windSpeed: number;
   windGusts: number;
@@ -94,14 +107,15 @@ const opt = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : n
 export async function fetchForecast(place: Place): Promise<Forecast> {
   const common = `latitude=${place.latitude.toFixed(4)}&longitude=${place.longitude.toFixed(4)}&timezone=Europe%2FParis&timeformat=unixtime&wind_speed_unit=kmh&past_days=1`;
   const hourlyVars =
-    'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,relative_humidity_2m,dew_point_2m,pressure_msl,cloud_cover,is_day';
+    'temperature_2m,apparent_temperature,precipitation,snowfall,cape,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,relative_humidity_2m,dew_point_2m,pressure_msl,cloud_cover,is_day';
   const dailyVars = 'weather_code,temperature_2m_min,temperature_2m_max,precipitation_sum,wind_gusts_10m_max,sunrise,sunset';
 
   // 1) Modèles Météo-France (hier + 4 jours)
   const mfUrl =
     `${BASE}?${common}&models=meteofrance_seamless&forecast_days=4` +
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,cloud_cover,is_day' +
-    '&minutely_15=precipitation,temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,is_day&forecast_minutely_15=24&past_minutely_15=0' +
+    // un quart d'heure de plus que les 6 h affichées : sert au décalage des périodes (voir QuarterPoint)
+    '&minutely_15=precipitation,snowfall,cape,temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,is_day&forecast_minutely_15=25&past_minutely_15=0' +
     `&hourly=${hourlyVars}&daily=${dailyVars}`;
 
   // 2) Meilleur modèle disponible : compléments + tendance 14 jours
@@ -130,9 +144,13 @@ export async function fetchForecast(place: Place): Promise<Forecast> {
   };
 
   const m = mf.minutely_15 ?? { time: [] };
-  const minutely: Minutely = ((m.time ?? []) as number[]).map((t, i) => ({
+  const mTimes = (m.time ?? []) as number[];
+  const minutely: Minutely = mTimes.slice(0, -1).map((t, i) => ({
     time: t,
-    precipitation: num(m.precipitation?.[i]),
+    // période [t, t + 15 min] = valeur datée t + 15 min
+    precipitation: num(m.precipitation?.[i + 1]),
+    snowfall: num(m.snowfall?.[i + 1]),
+    cape: opt(m.cape?.[i]),
     temperature: opt(m.temperature_2m?.[i]),
     windSpeed: opt(m.wind_speed_10m?.[i]),
     windGusts: opt(m.wind_gusts_10m?.[i]),
@@ -150,12 +168,16 @@ export async function fetchForecast(place: Place): Promise<Forecast> {
     const v = k === undefined ? null : opt(h[key]?.[k]);
     return v ?? opt(bh[key]?.[i]);
   };
+  // Sommes de la période [t, t + 1 h] : valeur datée t + 1 h
+  const next = (key: string, i: number, t: number) => pick(key, i + 1, t + 3600);
   const hourly: HourPoint[] = ((bh.time ?? []) as number[]).map((t, i) => ({
     time: t,
     temperature: num(pick('temperature_2m', i, t)),
     apparent: num(pick('apparent_temperature', i, t)),
-    precipitation: num(pick('precipitation', i, t)),
-    precipitationProbability: opt(bh.precipitation_probability?.[i]),
+    precipitation: num(next('precipitation', i, t)),
+    precipitationProbability: opt(bh.precipitation_probability?.[i + 1]),
+    snowfall: num(next('snowfall', i, t)),
+    cape: opt(pick('cape', i, t)),
     weatherCode: num(pick('weather_code', i, t)),
     windSpeed: num(pick('wind_speed_10m', i, t)),
     windGusts: num(pick('wind_gusts_10m', i, t)),
@@ -218,7 +240,7 @@ export function upcomingMinutely(minutely: Minutely) {
 }
 
 /** Délai (en minutes) avant la prochaine pluie dans l'heure, ou null. */
-export function minutesUntilRain(minutely: Minutely, thresholdMmPer15 = 0.05) {
+export function minutesUntilRain(minutely: Minutely, thresholdMmPer15 = RAIN_MMH / 4) {
   const now = Date.now() / 1000;
   const first = upcomingMinutely(minutely).find((p) => p.time < now + 3600 && p.precipitation >= thresholdMmPer15);
   if (!first) return null;

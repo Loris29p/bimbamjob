@@ -1,5 +1,6 @@
 // Récupère (et met en cache 10 min) les prévisions d'un lieu.
 import { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { fetchForecast, type Forecast } from './forecast';
 import { placeKey, type Place } from './types';
 
@@ -50,6 +51,14 @@ export function useForecast(place: Place | null) {
     setForecast(key ? cache.get(key) ?? null : null);
     run(false);
   }, [key, run]);
+
+  // Retour dans l'app : on recharge si la prévision a plus de 10 min (sinon la réponse « parapluie » vieillit).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') run(false);
+    });
+    return () => sub.remove();
+  }, [run]);
 
   const refresh = useCallback(() => run(true), [run]);
   return { forecast, loading, error, refresh };

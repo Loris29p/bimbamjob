@@ -1,25 +1,27 @@
-// Carte « Pluie » : la réponse (parapluie ou pas), la courbe d'intensité sur 3 h au quart d'heure
-// (AROME, Météo-France) et un rappel « préviens-moi » quand la pluie s'arrête ou arrive.
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { upcomingMinutely, type HourPoint, type Minutely } from '../lib/forecast';
+// Carte « Pluie » : la réponse (parapluie ou pas), d'où elle vient, la courbe d'intensité sur 3 h
+// au quart d'heure (AROME, Météo-France) qu'on peut parcourir au doigt, et un rappel « préviens-moi ».
+import { useEffect, useMemo, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
+import { upcomingMinutely, type Minutely } from '../lib/forecast';
 import { time } from '../lib/format';
-import { tap } from '../lib/hig';
+import { tap, tick } from '../lib/hig';
 import { cancelReminder, pendingReminder, scheduleReminder } from '../lib/notifications';
-import { umbrellaVerdict } from '../lib/umbrella';
+import { HEAVY_MMH, INTENSITY_LABELS, MODERATE_MMH, RAIN_MMH, intensity } from '../lib/rain';
+import type { UmbrellaVerdict } from '../lib/umbrella';
 import { DIM, Glass, Icon, LINE, RAIN_BLUE, T } from './ui';
 
 const CHART_H = 96;
+const SLOTS = 12; // 3 h
 const BANDS = ['Faible', 'Modérée', 'Forte'];
-const DOT = { yes: RAIN_BLUE, maybe: '#FFD60A', no: '#30D158' } as const;
+const TONE = { rain: RAIN_BLUE, snow: '#E5E5EA', storm: '#FF9F0A', maybe: '#FFD60A', dry: '#30D158' } as const;
 
-/** mm/h → hauteur 0..1, une bande par niveau (faible < 2,5 · modérée < 7,6 · forte au-delà). */
+/** mm/h → hauteur 0..1, une bande par niveau (faible · modérée · forte). */
 function level(mmh: number) {
-  if (mmh < 0.2) return 0;
-  if (mmh < 2.5) return (mmh / 2.5) / 3;
-  if (mmh < 7.6) return 1 / 3 + ((mmh - 2.5) / 5.1) / 3;
-  return 2 / 3 + Math.min(1, (mmh - 7.6) / 12) / 3;
+  if (mmh < RAIN_MMH) return 0;
+  if (mmh < MODERATE_MMH) return ((mmh - RAIN_MMH) / (MODERATE_MMH - RAIN_MMH)) / 3 + 0.02;
+  if (mmh < HEAVY_MMH) return 1 / 3 + ((mmh - MODERATE_MMH) / (HEAVY_MMH - MODERATE_MMH)) / 3;
+  return 2 / 3 + Math.min(1, (mmh - HEAVY_MMH) / 12) / 3;
 }
 
 /** Courbe lissée (sans dépassement) passant par les milieux des points. */
@@ -34,18 +36,63 @@ function smoothPath(pts: { x: number; y: number }[]) {
   return `${d} L${last.x},${last.y}`;
 }
 
-export function RainCard({ minutely, hourly, placeName, placeId }: { minutely: Minutely; hourly: HourPoint[]; placeName: string; placeId: string }) {
-  const slots = upcomingMinutely(minutely).slice(0, 13);
-  const verdict = umbrellaVerdict(minutely, hourly, placeName);
+const mm = (v: number) => (v < 0.1 ? '0 mm' : `${v.toFixed(1).replace('.', ',')} mm`);
+const mmh = (v: number) => `${v < 10 ? v.toFixed(1).replace('.', ',') : Math.round(v)} mm/h`;
+
+export function RainCard({ verdict, minutely, placeName, placeId }: { verdict: UmbrellaVerdict; minutely: Minutely; placeName: string; placeId: string }) {
   const [width, setWidth] = useState(0);
   const [pending, setPending] = useState<number | null>(null);
+  const [scrub, setScrub] = useState<number | null>(null);
   const reminderKey = `rain:${placeId}`;
+
+  // Débit par tranche ; la tranche en cours suit la réponse (mesure de station comprise).
+  const slots = useMemo(() => {
+    const list = upcomingMinutely(minutely)
+      .slice(0, SLOTS)
+      .map((s) => ({ time: s.time, mmh: s.precipitation * 4 }));
+    if (list[0] && verdict.now.source === 'station') list[0] = { ...list[0], mmh: verdict.now.mmh };
+    return list;
+  }, [minutely, verdict.now]);
 
   useEffect(() => {
     pendingReminder(reminderKey).then(setPending);
-  }, [reminderKey, verdict?.reminder?.at]);
+  }, [reminderKey]);
 
-  if (!verdict) return null;
+  // La prévision a changé : on déplace le rappel en attente (ou on l'annule s'il n'a plus lieu d'être).
+  const at = verdict.reminder?.at;
+  useEffect(() => {
+    if (pending === null || pending === 0) return;
+    if (at === undefined) {
+      cancelReminder(reminderKey).then(() => setPending(null));
+    } else if (Math.abs(at - pending) > 120) {
+      scheduleReminder(reminderKey, `☂️ ${placeName}`, verdict.reminder!.body, at).then((ok) => setPending(ok ? at : null));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at]);
+
+  const n = slots.length;
+  const pan = useMemo(() => {
+    const cur = { last: -1 };
+    const toIndex = (x: number) => Math.max(0, Math.min(n - 1, Math.floor((x / Math.max(1, width)) * n)));
+    return PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > Math.abs(g.dy),
+        onPanResponderGrant: (e) => {
+          const i = toIndex(e.nativeEvent.locationX);
+          cur.last = i;
+          tick();
+          setScrub(i);
+        },
+        onPanResponderMove: (e) => {
+          const i = toIndex(e.nativeEvent.locationX);
+          if (i !== cur.last) tick();
+          cur.last = i;
+          setScrub(i);
+        },
+        onPanResponderRelease: () => setScrub(null),
+        onPanResponderTerminate: () => setScrub(null),
+      });
+  }, [n, width]);
 
   const onReminder = async () => {
     tap();
@@ -54,27 +101,56 @@ export function RainCard({ minutely, hourly, placeName, placeId }: { minutely: M
       setPending(null);
     } else if (verdict.reminder) {
       const r = verdict.reminder;
-      if (await scheduleReminder(reminderKey, `🌂 ${placeName}`, r.body, r.at)) setPending(r.at);
+      if (await scheduleReminder(reminderKey, `☂️ ${placeName}`, r.body, r.at)) setPending(r.at);
     }
   };
 
-  const pts = slots.map((s, i) => ({
-    x: slots.length > 1 ? (i / (slots.length - 1)) * width : 0,
-    y: CHART_H - level(s.precipitation * 4) * CHART_H,
-  }));
-  const dry = slots.every((s) => s.precipitation * 4 < 0.2);
+  const xAt = (i: number) => ((i + 0.5) / Math.max(1, n)) * width;
+  const yAt = (v: number) => CHART_H - level(v) * CHART_H;
+  const pts = n > 1 ? [{ x: 0, y: yAt(slots[0].mmh) }, ...slots.map((s, i) => ({ x: xAt(i), y: yAt(s.mmh) })), { x: width, y: yAt(slots[n - 1].mmh) }] : [];
+  const dry = slots.every((s) => s.mmh < RAIN_MMH);
   const line = width > 0 && pts.length > 1 ? smoothPath(pts) : null;
+  const color = TONE[verdict.tone];
+
+  const st = verdict.now.station;
+  const source =
+    verdict.now.source === 'station' && st
+      ? `${verdict.now.wet ? 'Pluie mesurée' : 'Mesure'} à ${st.name} (${st.distanceKm < 1 ? '< 1' : Math.round(st.distanceKm)} km) · il y a ${st.ageMin} min`
+      : null;
+
+  // Lecture au doigt : heure, intensité, cumul d'ici là
+  const sel = scrub !== null ? slots[scrub] : null;
+  const cumul = scrub !== null ? slots.slice(0, scrub + 1).reduce((a, s) => a + s.mmh / 4, 0) : 0;
 
   return (
     <Glass title="Pluie" icon={{ ios: 'umbrella.fill', android: 'umbrella' }}>
       <View style={styles.verdictRow}>
-        <View style={[styles.dot, { backgroundColor: DOT[verdict.need] }]} />
+        <View style={[styles.dot, { backgroundColor: color }]} />
         <T style={styles.title}>{verdict.title}</T>
       </View>
       <T style={styles.detail}>{verdict.detail}</T>
+      {source ? <T style={styles.source}>{source}</T> : null}
 
-      {slots.length > 1 ? (
+      {verdict.dryWindow ? (
+        <View style={styles.chip}>
+          <Icon name={{ ios: 'sun.max.fill', android: 'wb_sunny' }} size={13} color="#FFD60A" />
+          <T style={styles.chipText}>
+            {verdict.dryWindow.to ? `Créneau sec : ${time(verdict.dryWindow.from)} → ${time(verdict.dryWindow.to)}` : `Au sec à partir de ${time(verdict.dryWindow.from)}`}
+          </T>
+        </View>
+      ) : null}
+
+      {n > 1 ? (
         <>
+          <View style={styles.readout}>
+            {sel ? (
+              <T style={styles.readoutText}>
+                {`${time(sel.time)} · ${sel.mmh < RAIN_MMH ? 'sec' : `${INTENSITY_LABELS[intensity(sel.mmh)]}, ${mmh(sel.mmh)}`} · ${mm(cumul)} d'ici là`}
+              </T>
+            ) : (
+              <T style={[styles.readoutText, { color: DIM }]}>{verdict.nextHourMm >= 0.1 ? `Prochaine heure : ${mm(verdict.nextHourMm)}` : 'Glisse le doigt sur la courbe'}</T>
+            )}
+          </View>
           <View style={styles.chartRow}>
             <View style={styles.bandLabels}>
               {[...BANDS].reverse().map((b) => (
@@ -83,12 +159,12 @@ export function RainCard({ minutely, hourly, placeName, placeId }: { minutely: M
                 </T>
               ))}
             </View>
-            <View style={styles.chart} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+            <View style={styles.chart} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} {...pan.panHandlers}>
               {[1, 2].map((k) => (
                 <View key={k} style={[styles.grid, { top: (k * CHART_H) / 3 }]} />
               ))}
               {line ? (
-                <Svg width={width} height={CHART_H} style={StyleSheet.absoluteFill}>
+                <Svg width={width} height={CHART_H} style={StyleSheet.absoluteFill} pointerEvents="none">
                   <Defs>
                     <LinearGradient id="rainFill" x1="0" y1="0" x2="0" y2="1">
                       <Stop offset="0" stopColor={RAIN_BLUE} stopOpacity={0.7} />
@@ -97,6 +173,12 @@ export function RainCard({ minutely, hourly, placeName, placeId }: { minutely: M
                   </Defs>
                   {!dry ? <Path d={`${line} L${width},${CHART_H} L0,${CHART_H} Z`} fill="url(#rainFill)" /> : null}
                   <Path d={line} stroke={RAIN_BLUE} strokeWidth={2.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+                  {scrub !== null ? (
+                    <>
+                      <Line x1={xAt(scrub)} x2={xAt(scrub)} y1={0} y2={CHART_H} stroke="rgba(255,255,255,0.6)" strokeWidth={1} />
+                      <Circle cx={xAt(scrub)} cy={yAt(slots[scrub].mmh)} r={5} fill="#fff" stroke={RAIN_BLUE} strokeWidth={2} />
+                    </>
+                  ) : null}
                 </Svg>
               ) : null}
             </View>
@@ -105,7 +187,7 @@ export function RainCard({ minutely, hourly, placeName, placeId }: { minutely: M
           <View style={styles.axis}>
             {slots.map((s, i) =>
               i % 4 === 0 ? (
-                <T key={s.time} numberOfLines={1} style={[styles.label, { left: `${(i / (slots.length - 1)) * 100}%`, transform: [{ translateX: i === 0 ? 0 : i === slots.length - 1 ? -44 : -22 }] }]}>
+                <T key={s.time} numberOfLines={1} style={[styles.label, { left: `${(i / n) * 100}%` }]}>
                   {i === 0 ? 'Maint.' : time(s.time)}
                 </T>
               ) : null,
@@ -127,15 +209,20 @@ export function RainCard({ minutely, hourly, placeName, placeId }: { minutely: M
 const styles = StyleSheet.create({
   verdictRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  title: { fontSize: 20, fontWeight: '600' },
-  detail: { fontSize: 15, color: DIM, marginTop: 4, marginBottom: 14 },
+  title: { fontSize: 20, fontWeight: '600', flexShrink: 1 },
+  detail: { fontSize: 15, color: DIM, marginTop: 4 },
+  source: { fontSize: 12, color: DIM, marginTop: 4 },
+  chip: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.1)' },
+  chipText: { fontSize: 13, fontWeight: '600' },
+  readout: { height: 20, marginTop: 12, marginBottom: 4, justifyContent: 'center' },
+  readoutText: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   chartRow: { flexDirection: 'row', gap: 8 },
   bandLabels: { width: 50, height: CHART_H, justifyContent: 'space-around' },
   bandLabel: { fontSize: 11, color: DIM },
   chart: { flex: 1, height: CHART_H, borderBottomWidth: 1, borderBottomColor: LINE },
   grid: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: LINE },
   axis: { height: 18, marginTop: 4, marginLeft: 58 },
-  label: { position: 'absolute', width: 44, fontSize: 12, color: DIM },
+  label: { position: 'absolute', width: 48, fontSize: 12, color: DIM },
   button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)' },
   buttonText: { fontSize: 15, fontWeight: '600' },
 });

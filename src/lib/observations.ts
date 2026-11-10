@@ -23,6 +23,8 @@ export type Observation = {
   windGusts: number | null; // km/h
   windDirection: number | null; // degrés
   rain6min: number | null; // mm
+  /** Pluie des 6 dernières minutes, avec la station qui l'a mesurée (pas forcément la principale) */
+  rain: { mm: number; stationName: string; distanceKm: number; time: number } | null;
   pressure: number | null; // hPa
   visibility: number | null; // m
   /** Station utilisée pour le vent, si différente de la station principale */
@@ -123,6 +125,7 @@ export async function fetchNearestObservation(place: Place, placeAltitude?: numb
 
   const t = pickField('t', (k) => k - 273.15); // Kelvin → °C
   const ff = pickField('ff', (v) => v * 3.6); // m/s → km/h
+  const rr = pickField('rr_per');
   const main = t ?? ff;
   if (!main) return null;
   const sameWindStation = (m: Measured | null) => (m && m.station.id === ff?.station.id ? m.value : null);
@@ -136,7 +139,8 @@ export async function fetchNearestObservation(place: Place, placeAltitude?: numb
     windSpeed: ff?.value ?? null,
     windGusts: sameWindStation(pickField('fxi10', (v) => v * 3.6)),
     windDirection: sameWindStation(pickField('dd')),
-    rain6min: pickField('rr_per')?.value ?? null,
+    rain6min: rr?.value ?? null,
+    rain: rr ? { mm: rr.value, stationName: rr.station.name, distanceKm: rr.distanceKm, time: rr.time } : null,
     pressure: pickField('pmer', (p) => p / 100)?.value ?? null, // Pa → hPa
     visibility: pickField('vv')?.value ?? null,
     windStation: ff && ff.station.id !== main.station.id ? { name: ff.station.name, distanceKm: ff.distanceKm } : null,
