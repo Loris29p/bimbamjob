@@ -14,7 +14,11 @@ export default function RootLayout() {
         <Stack.Screen name="radar" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="vigilance" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
         <Stack.Screen name="detail" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
-        <Stack.Screen name="alertes" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
+        {/* feuille ajustée à son contenu, fond transparent : iOS pose son verre (Liquid Glass) */}
+        <Stack.Screen
+          name="alertes"
+          options={{ presentation: 'formSheet', sheetAllowedDetents: 'fitToContents', sheetGrabberVisible: true, sheetCornerRadius: 32, contentStyle: { backgroundColor: 'transparent' } }}
+        />
         <Stack.Screen name="apercu" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
       </Stack>
     </PlaceProvider>
