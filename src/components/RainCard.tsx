@@ -1,12 +1,13 @@
 // Carte « Pluie » : la réponse (parapluie ou pas), d'où elle vient, la courbe d'intensité sur 3 h
 // au quart d'heure (AROME, Météo-France) qu'on peut parcourir au doigt, et un rappel « préviens-moi ».
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { ActionSheetIOS, PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 import { upcomingMinutely, type Minutely } from '../lib/forecast';
 import { time } from '../lib/format';
 import { tap, tick } from '../lib/hig';
-import { cancelReminder, getAlertPrefs, onAlertPrefs, pendingReminder, scheduleReminder, setAlertPrefs, type AlertPrefs } from '../lib/notifications';
+import { cancelReminder, getAlertPrefs, onAlertPrefs, pendingReminder, scheduleReminder, type AlertPrefs } from '../lib/notifications';
 import type { FusionInfo } from '../lib/rainFusion';
 import { windFrom } from '../lib/weatherCodes';
 import { HEAVY_MMH, INTENSITY_LABELS, MODERATE_MMH, RAIN_MMH, intensity } from '../lib/rain';
@@ -42,7 +43,7 @@ const mm = (v: number) => (v < 0.1 ? '0 mm' : `${v.toFixed(1).replace('.', ',')}
 const mmh = (v: number) => `${v < 10 ? v.toFixed(1).replace('.', ',') : Math.round(v)} mm/h`;
 
 const SCOPE_LABEL = { gps: 'ma position', all: 'toutes mes villes', off: 'désactivées' } as const;
-const LEVEL_LABEL = { light: 'dès la bruine', rain: 'pluie franche' } as const;
+const LEVEL_LABEL = { light: 'dès la bruine', rain: 'vraie pluie seulement' } as const;
 
 function useAlertPrefs() {
   const [p, setP] = useState<AlertPrefs | null>(null);
@@ -51,21 +52,6 @@ function useAlertPrefs() {
     return onAlertPrefs(setP);
   }, []);
   return p;
-}
-
-function editAlerts(p: AlertPrefs) {
-  if (Platform.OS !== 'ios') return;
-  const options = ['Ma position seulement', 'Toutes mes villes', 'Dès la bruine', 'Seulement la pluie franche', 'Désactiver', 'Annuler'];
-  ActionSheetIOS.showActionSheetWithOptions(
-    { title: 'Alertes « pluie dans l’heure »', message: 'Vérifiées à chaque ouverture de l’app.', options, cancelButtonIndex: 5, destructiveButtonIndex: 4 },
-    (i) => {
-      if (i === 0) setAlertPrefs({ ...p, scope: 'gps' });
-      if (i === 1) setAlertPrefs({ ...p, scope: 'all' });
-      if (i === 2) setAlertPrefs({ ...p, level: 'light', scope: p.scope === 'off' ? 'gps' : p.scope });
-      if (i === 3) setAlertPrefs({ ...p, level: 'rain', scope: p.scope === 'off' ? 'gps' : p.scope });
-      if (i === 4) setAlertPrefs({ ...p, scope: 'off' });
-    },
-  );
 }
 
 export function RainCard({ verdict, minutely, placeName, placeId, info }: { verdict: UmbrellaVerdict; minutely: Minutely; placeName: string; placeId: string; info?: FusionInfo }) {
@@ -196,7 +182,7 @@ export function RainCard({ verdict, minutely, placeName, placeId, info }: { verd
                 {`${time(sel.time)} · ${sel.mmh < RAIN_MMH ? 'sec' : `${INTENSITY_LABELS[intensity(sel.mmh)]}, ${mmh(sel.mmh)}`} · ${mm(cumul)} d'ici là`}
               </T>
             ) : (
-              <T style={[styles.readoutText, { color: DIM }]}>{verdict.nextHourMm >= 0.1 ? `Prochaine heure : ${mm(verdict.nextHourMm)}` : 'Glisse le doigt sur la courbe'}</T>
+              <T style={[styles.readoutText, { color: DIM }]}>{verdict.nextHourMm >= 0.1 ? `Prochaine heure : ${mm(verdict.nextHourMm)} · glisse le doigt sur la courbe` : dry ? 'Pas de pluie dans les 3 prochaines heures' : 'Glisse le doigt sur la courbe'}</T>
             )}
           </View>
           <View style={styles.chartRow}>
@@ -251,7 +237,7 @@ export function RainCard({ verdict, minutely, placeName, placeId, info }: { verd
         </Pressable>
       ) : null}
       {alerts ? (
-        <Pressable onPress={() => editAlerts(alerts)} style={styles.alertsRow} accessibilityRole="button">
+        <Pressable onPress={() => router.push('/alertes')} style={styles.alertsRow} accessibilityRole="button">
           <Icon name={{ ios: alerts.scope === 'off' ? 'bell.slash' : 'bell.badge', android: 'notifications' }} size={13} color={DIM} />
           <T style={styles.alertsText}>
             {alerts.scope === 'off' ? 'Alertes pluie désactivées' : `Alertes pluie : ${SCOPE_LABEL[alerts.scope]}, ${LEVEL_LABEL[alerts.level]}`}

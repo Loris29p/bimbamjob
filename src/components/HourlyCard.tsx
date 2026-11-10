@@ -20,6 +20,9 @@ const MODES: { id: Mode; label: string; icon: Parameters<typeof Icon>[0]['name']
   { id: 'wind', label: 'Vent', icon: { ios: 'wind', android: 'air' } },
 ];
 
+const RAINY = (code: number) => code >= 51 && code <= 67 || (code >= 80 && code <= 82) || code >= 95;
+/** Heure où le modèle Météo-France ne prévoit pas de pluie mesurable (moins de 0,1 mm). */
+const dryHour = (h: HourPoint) => RAINY(h.weatherCode) && h.precipitation < 0.1 && h.snowfall === 0;
 export function HourlyCard({ hourly, daily, mode, onMode: setMode }: { hourly: HourPoint[]; daily: DayPoint[]; mode: Mode; onMode: (m: Mode) => void }) {
   // Comme dans Météo : « Conditions météo » en haut de page, puis « PRÉVISIONS HEURE PAR HEURE »
   // une fois l'en-tête de la ville replié.
@@ -98,8 +101,10 @@ export function HourlyCard({ hourly, daily, mode, onMode: setMode }: { hourly: H
               {mode === 'temp' ? (
                 <>
                   <View style={styles.iconBox}>
-                    <Icon name={symbolFor(h.weatherCode, h.isDay)} size={26} multicolor />
-                    {(h.precipitationProbability ?? 0) >= 20 ? <T style={styles.prob}>{Math.round((h.precipitationProbability ?? 0) / 10) * 10} %</T> : null}
+                    {/* Même règle que la carte Pluie : AROME (1,3 km) fait foi sur la quantité ; sans pluie prévue,
+                        pas d'icône de pluie ni de pourcentage venu de l'ensemble (maille ~27 km). */}
+                    <Icon name={symbolFor(dryHour(h) ? 3 : h.weatherCode, h.isDay)} size={26} multicolor />
+                    {!dryHour(h) && (h.precipitationProbability ?? 0) >= 20 ? <T style={styles.prob}>{Math.round((h.precipitationProbability ?? 0) / 10) * 10} %</T> : null}
                   </View>
                   <T style={styles.value}>{temp(h.temperature)}</T>
                 </>

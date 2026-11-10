@@ -14,6 +14,7 @@ export default function RootLayout() {
         <Stack.Screen name="radar" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="vigilance" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
         <Stack.Screen name="detail" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
+        <Stack.Screen name="alertes" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
         <Stack.Screen name="apercu" options={{ presentation: 'pageSheet', sheetGrabberVisible: true }} />
       </Stack>
     </PlaceProvider>

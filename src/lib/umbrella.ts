@@ -184,13 +184,12 @@ export function umbrellaVerdict(minutely: Minutely, hourly: HourPoint[], placeNa
         reminder: at - now > 5 * 60 ? { at, label: 'Préviens-moi 10 min avant', body: `${word} à ${placeName} dans 10 min.` } : undefined,
       };
     }
-    const dryNow = nowState.source === 'station' && station ? ` Rien de mesuré à ${station.name} pour l'instant.` : '';
     return {
       ...base,
       need: 'yes',
       tone: toneFor(kind),
       title: titleFor(kind, false),
-      detail: `${KIND_WORDS[kind]} ${soon ?? `à partir de ${fmt(s, s.start)}`}${span}.${dryNow}`,
+      detail: `${KIND_WORDS[kind]} ${soon ?? `à partir de ${fmt(s, s.start)}`}${span}.`,
       reminder: at - now > 5 * 60 ? { at, label: 'Préviens-moi 10 min avant', body: `${KIND_WORDS[kind]} à ${placeName} dans 10 min.` } : undefined,
     };
   }
