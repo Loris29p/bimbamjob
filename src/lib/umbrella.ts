@@ -1,13 +1,15 @@
 // « Parapluie ou pas ? » : une réponse en une phrase.
 // Sources, de la plus sûre à la moins sûre :
 //  1. la pluie MESURÉE par une station Météo-France proche (6 dernières minutes) ;
-//  2. la prévision AROME au quart d'heure (~6 h) ;
+//  2. le radar au-dessus du lieu, prolongé selon le déplacement de la pluie, fondu dans AROME (rainFusion) ;
+//     la prévision AROME au quart d'heure (~6 h) ;
 //  3. puis l'horaire jusqu'à ce soir (ou les 12 prochaines heures en soirée).
 // Chaque tranche couvre [start, end] : la pluie qui tombe PENDANT la tranche (voir forecast.ts).
 import { upcomingHours, upcomingMinutely, type HourPoint, type Minutely } from './forecast';
 import { hour, time } from './format';
 import type { Observation } from './observations';
-import { KIND_WORDS, isWet, kindOf, type PrecipKind } from './rain';
+import type { FusionInfo } from './rainFusion';
+import { KIND_WORDS, intensity, isWet, kindOf, type PrecipKind } from './rain';
 
 type Slot = {
   start: number;
@@ -29,7 +31,7 @@ export type RainNow = {
   mmh: number;
   kind: PrecipKind;
   /** d'où vient l'info « il pleut / il ne pleut pas maintenant » */
-  source: 'station' | 'forecast';
+  source: 'station' | 'radar' | 'forecast';
   station?: { name: string; distanceKm: number; ageMin: number };
 };
 
@@ -40,6 +42,8 @@ export type UmbrellaVerdict = {
   title: string;
   detail: string;
   now: RainNow;
+  /** accord radar / prévision sur l'heure à venir (absent sans radar) */
+  confidence?: { high: boolean; text: string };
   /** cumul prévu sur la prochaine heure (mm) */
   nextHourMm: number;
   /** prochain créneau sans pluie d'au moins 30 min, quand il pleut ou va pleuvoir */
@@ -97,7 +101,7 @@ const titleFor = (kind: PrecipKind, now: boolean) =>
   kind === 'snow' ? (now ? 'Couvre-toi, il neige' : 'Neige en vue') : kind === 'storm' ? 'Prends ton parapluie, orage possible' : 'Prends ton parapluie';
 const toneFor = (kind: PrecipKind): UmbrellaVerdict['tone'] => (kind === 'snow' || kind === 'mixed' ? 'snow' : kind === 'storm' ? 'storm' : 'rain');
 
-export function umbrellaVerdict(minutely: Minutely, hourly: HourPoint[], placeName: string, obs?: Observation | null): UmbrellaVerdict | null {
+export function umbrellaVerdict(minutely: Minutely, hourly: HourPoint[], placeName: string, obs?: Observation | null, fusion?: FusionInfo): UmbrellaVerdict | null {
   const now = Date.now() / 1000;
   const evening = new Date();
   evening.setHours(23, 0, 0, 0);
@@ -120,17 +124,23 @@ export function umbrellaVerdict(minutely: Minutely, hourly: HourPoint[], placeNa
     wet: slots[0].wet,
     mmh: slots[0].mmh,
     kind: slots[0].kind,
-    source: measured && (measured.mm > 0 || !slots[0].wet) ? 'station' : 'forecast',
+    source: measured && (measured.mm > 0 || !slots[0].wet) ? 'station' : fusion?.radar ? 'radar' : 'forecast',
     station,
   };
   const nextHourMm = slots.filter((s) => s.fine && s.start < now + 3600).reduce((a, s) => a + s.mmh / 4, 0);
-  const base = { now: nowState, nextHourMm };
+  const confidence =
+    fusion?.agreement != null
+      ? fusion.agreement >= 0.75
+        ? { high: true, text: 'Radar et prévision concordent' }
+        : { high: false, text: 'Radar et prévision divergent : à surveiller' }
+      : undefined;
+  const base = { now: nowState, nextHourMm, confidence };
 
   // Il pleut maintenant
   if (slots[0].wet) {
     const stop = dryFrom(slots, 0);
     const kind = spanKind(slots, 0, stop);
-    const where = nowState.source === 'station' && station ? ` (mesuré à ${station.name})` : '';
+    const where = nowState.source === 'station' && station ? ` (mesuré à ${station.name})` : nowState.source === 'radar' ? ' (vu au radar)' : '';
     const verb = kind === 'snow' ? 'Il neige' : kind === 'mixed' ? 'Pluie et neige' : 'Il pleut';
     if (stop === -1)
       return { ...base, need: 'yes', tone: toneFor(kind), title: titleFor(kind, true), detail: `${verb}${where}, sans accalmie prévue ${horizon}.` };
@@ -156,13 +166,31 @@ export function umbrellaVerdict(minutely: Minutely, hourly: HourPoint[], placeNa
     const kind = spanKind(slots, first, stop);
     const span = stop === -1 ? ` et jusqu'à la fin ${night ? 'de la nuit' : 'de la journée'}` : `, jusqu'à ${fmt(slots[stop], slots[stop].start)} environ`;
     const at = s.start - 10 * 60;
+    // Averse proche et courte : on la décrit (arrivée, durée, intensité) plutôt qu'une plage horaire.
+    const mins = Math.round((s.start - now) / 60);
+    const dur = stop === -1 ? Infinity : Math.max(15, Math.round((slots[stop].start - s.start) / 60 / 5) * 5);
+    const soon = s.fine && mins <= 60 ? `dans ~${Math.max(5, Math.round(mins / 5) * 5)} min` : null;
+    if (s.fine && stop !== -1 && slots[stop].fine && mins <= 120 && dur <= 90) {
+      const peak = Math.max(...slots.slice(first, stop).map((x) => x.mmh));
+      const word = kind === 'snow' ? 'Neige' : kind === 'storm' ? 'Averse orageuse' : kind === 'mixed' ? 'Pluie et neige' : 'Averse';
+      const when = soon ?? `vers ${time(s.start)}`;
+      const strength = ['faible', 'faible', 'modérée', 'forte'][intensity(peak)];
+      return {
+        ...base,
+        need: 'yes',
+        tone: toneFor(kind),
+        title: titleFor(kind, false),
+        detail: `${word} ${when}, pendant ~${dur} min, ${strength}.`,
+        reminder: at - now > 5 * 60 ? { at, label: 'Préviens-moi 10 min avant', body: `${word} à ${placeName} dans 10 min.` } : undefined,
+      };
+    }
     const dryNow = nowState.source === 'station' && station ? ` Rien de mesuré à ${station.name} pour l'instant.` : '';
     return {
       ...base,
       need: 'yes',
       tone: toneFor(kind),
       title: titleFor(kind, false),
-      detail: `${KIND_WORDS[kind]} à partir de ${fmt(s, s.start)}${span}.${dryNow}`,
+      detail: `${KIND_WORDS[kind]} ${soon ?? `à partir de ${fmt(s, s.start)}`}${span}.${dryNow}`,
       reminder: at - now > 5 * 60 ? { at, label: 'Préviens-moi 10 min avant', body: `${KIND_WORDS[kind]} à ${placeName} dans 10 min.` } : undefined,
     };
   }

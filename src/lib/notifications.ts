@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
 Notifications.setNotificationHandler({
@@ -9,16 +10,46 @@ Notifications.setNotificationHandler({
   }),
 });
 
-let lastNotified = 0;
+// ---- Alertes « pluie dans l'heure » (vérifiées quand l'app est ouverte) ----
+export type AlertPrefs = { scope: 'gps' | 'all' | 'off'; level: 'light' | 'rain' };
+const PREFS_KEY = 'rain-alert-prefs';
+let prefs: AlertPrefs = { scope: 'gps', level: 'light' };
+let prefsLoaded = false;
+const listeners = new Set<(p: AlertPrefs) => void>();
 
-/** Prévient l'utilisateur qu'il va pleuvoir (au plus une fois toutes les 30 min). */
-export async function notifyRain(placeName: string, minutes: number) {
-  if (Date.now() - lastNotified < 30 * 60 * 1000) return;
+export async function getAlertPrefs(): Promise<AlertPrefs> {
+  if (!prefsLoaded) {
+    prefsLoaded = true;
+    try {
+      const raw = await AsyncStorage.getItem(PREFS_KEY);
+      if (raw) prefs = { ...prefs, ...JSON.parse(raw) };
+    } catch {}
+  }
+  return prefs;
+}
+export function setAlertPrefs(p: AlertPrefs) {
+  prefs = p;
+  prefsLoaded = true;
+  AsyncStorage.setItem(PREFS_KEY, JSON.stringify(p)).catch(() => {});
+  listeners.forEach((l) => l(p));
+}
+export function onAlertPrefs(l: (p: AlertPrefs) => void) {
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
+}
+/** Seuil d'alerte en mm par quart d'heure : dès la bruine (0,2 mm/h) ou pluie franche (1 mm/h). */
+export const alertThreshold = (p: AlertPrefs) => (p.level === 'light' ? 0.2 : 1) / 4;
+
+/** Prévient qu'il va pleuvoir (au plus une fois toutes les 45 min par lieu, même après redémarrage). */
+export async function notifyRain(key: string, placeName: string, minutes: number) {
+  const storeKey = `rain-notified:${key}`;
   try {
-    const perm = await Notifications.getPermissionsAsync();
-    const granted = perm.granted || (perm.canAskAgain && (await Notifications.requestPermissionsAsync()).granted);
-    if (!granted) return;
-    lastNotified = Date.now();
+    const last = Number((await AsyncStorage.getItem(storeKey)) ?? 0);
+    if (Date.now() - last < 45 * 60 * 1000) return;
+    if (!(await canNotify())) return;
+    await AsyncStorage.setItem(storeKey, String(Date.now()));
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `🌧️ Pluie à ${placeName}`,
@@ -27,7 +58,7 @@ export async function notifyRain(placeName: string, minutes: number) {
       trigger: null,
     });
   } catch {
-    // notifications indisponibles (ex. Expo Go sur Android) : on ignore
+    // notifications indisponibles : on ignore
   }
 }
 

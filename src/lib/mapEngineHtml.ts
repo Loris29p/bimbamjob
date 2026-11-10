@@ -10,6 +10,8 @@
 //  - Calques température / vent / qualité de l'air, températures des lieux.
 // Il envoie à l'app (postMessage) les images à poser sur la carte, les pastilles à afficher
 // et l'état de la frise ; l'app le pilote via window.rn (lecture, frise, calque, zone visible).
+import { RV_RAIN, RV_SNOW } from './rainviewerColors';
+
 export type MapView4 = { n: number; s: number; w: number; e: number; zoom: number };
 export type EnginePlace = { lat: number; lon: number };
 
@@ -105,8 +107,8 @@ var fcCache={};
 // 128 couleurs « pluie » puis 128 « neige », une par dBZ. On retrouve la plus proche, d'où le dBZ,
 // puis l'intensité : pluie Z = 200·R^1,6 (Marshall-Palmer), neige Z = 2000·S² (équivalent en eau).
 // Tables de −10 à 66 dBZ (pluie) et de −10 à 74 dBZ (neige), au pas de 1 dBZ, en RRGGBBAA.
-var RV_RAIN='6361591466635a1969665c1e6c685d246f6b5f29726e612e75706234787364397c75653e7f786744827b6949857d6a4e88806c548b826d598e856f5e928871649e93756eaa9e7978b6a97e82c2b4828ccec08796d2c48ba0d6c88faadacc93b4ded097be88ddeeff6cd1ebff51c5e8ff36bae5ff1baee2ff00a3e0ff009ad5ff0091caff0088bfff007fb4ff0077aaff0070a3ff00699cff006295ff005b8eff005588ff005180ff004e78ff004a70ff004768ffffee00ffffe000ffffd200ffffc500ffffb700ffffaa00ffff9f00ffff9500ffff8b00ffff8100ffff4400fff23600ffe62800ffd91b00ffcd0d00ffc10000ffa80000ff8f0000ff760000ff5d0000ffffaaffffff9fffffff95ffffff8bffffff81ffffff77ffffff6cffffff62ffffff58ffffff4effffffffffffffffffff';
-var RV_SNOW='cfffff00ceffff0ccdffff19ccffff26cbffff33cbffff3fcaffff4cc9ffff59c8ffff66c7ffff72c7ffff7fc6ffff8cc5ffff99c4ffffa5c3ffffb2c3ffffbfc2ffffccc1ffffd8c0ffffe5bffffff2bfffffffb8f8ffffb2f2ffffabebffffa5e5ffff9fdfffff98d8ffff92d2ffff8bcbffff85c5ffff7fbfffff78b8ffff72b2ffff6babffff65a5ffff5f9fffff5b9bffff5898ffff5595ffff5292ffff4f8fffff4b8bffff4888ffff4585ffff4282ffff3f7fffff3b7bffff3878ffff3575ffff3272ffff2f6fffff2b6bffff2868ffff2565ffff2262ffff1f5fffff1b5bffff1858ffff1555ffff1252ffff0f4fffff0c4bffff0948ffff0645ffff0242ffff003fffff003bffff0038ffff0035ffff0032ffff002fffff002bffff0028ffff0025ffff0022ffff001fffff001bffff0018ffff0015ffff0012ffff000fffff000cffff0009ffff0006ffff0002ffff';
+var RV_RAIN='${RV_RAIN}';
+var RV_SNOW='${RV_SNOW}';
 var RV=[];
 (function(){
   function add(s,snow){for(var i=0;i<s.length;i+=8){var c=[0,2,4,6].map(function(k){return parseInt(s.substr(i+k,2),16)}),a=c[3]/255,z=Math.pow(10,(i/8-10)/10);

@@ -1,12 +1,14 @@
 // Carte « Pluie » : la réponse (parapluie ou pas), d'où elle vient, la courbe d'intensité sur 3 h
 // au quart d'heure (AROME, Météo-France) qu'on peut parcourir au doigt, et un rappel « préviens-moi ».
 import { useEffect, useMemo, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { ActionSheetIOS, PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 import { upcomingMinutely, type Minutely } from '../lib/forecast';
 import { time } from '../lib/format';
 import { tap, tick } from '../lib/hig';
-import { cancelReminder, pendingReminder, scheduleReminder } from '../lib/notifications';
+import { cancelReminder, getAlertPrefs, onAlertPrefs, pendingReminder, scheduleReminder, setAlertPrefs, type AlertPrefs } from '../lib/notifications';
+import type { FusionInfo } from '../lib/rainFusion';
+import { windFrom } from '../lib/weatherCodes';
 import { HEAVY_MMH, INTENSITY_LABELS, MODERATE_MMH, RAIN_MMH, intensity } from '../lib/rain';
 import type { UmbrellaVerdict } from '../lib/umbrella';
 import { DIM, Glass, Icon, LINE, RAIN_BLUE, T } from './ui';
@@ -39,7 +41,35 @@ function smoothPath(pts: { x: number; y: number }[]) {
 const mm = (v: number) => (v < 0.1 ? '0 mm' : `${v.toFixed(1).replace('.', ',')} mm`);
 const mmh = (v: number) => `${v < 10 ? v.toFixed(1).replace('.', ',') : Math.round(v)} mm/h`;
 
-export function RainCard({ verdict, minutely, placeName, placeId }: { verdict: UmbrellaVerdict; minutely: Minutely; placeName: string; placeId: string }) {
+const SCOPE_LABEL = { gps: 'ma position', all: 'toutes mes villes', off: 'désactivées' } as const;
+const LEVEL_LABEL = { light: 'dès la bruine', rain: 'pluie franche' } as const;
+
+function useAlertPrefs() {
+  const [p, setP] = useState<AlertPrefs | null>(null);
+  useEffect(() => {
+    getAlertPrefs().then(setP);
+    return onAlertPrefs(setP);
+  }, []);
+  return p;
+}
+
+function editAlerts(p: AlertPrefs) {
+  if (Platform.OS !== 'ios') return;
+  const options = ['Ma position seulement', 'Toutes mes villes', 'Dès la bruine', 'Seulement la pluie franche', 'Désactiver', 'Annuler'];
+  ActionSheetIOS.showActionSheetWithOptions(
+    { title: 'Alertes « pluie dans l’heure »', message: 'Vérifiées à chaque ouverture de l’app.', options, cancelButtonIndex: 5, destructiveButtonIndex: 4 },
+    (i) => {
+      if (i === 0) setAlertPrefs({ ...p, scope: 'gps' });
+      if (i === 1) setAlertPrefs({ ...p, scope: 'all' });
+      if (i === 2) setAlertPrefs({ ...p, level: 'light', scope: p.scope === 'off' ? 'gps' : p.scope });
+      if (i === 3) setAlertPrefs({ ...p, level: 'rain', scope: p.scope === 'off' ? 'gps' : p.scope });
+      if (i === 4) setAlertPrefs({ ...p, scope: 'off' });
+    },
+  );
+}
+
+export function RainCard({ verdict, minutely, placeName, placeId, info }: { verdict: UmbrellaVerdict; minutely: Minutely; placeName: string; placeId: string; info?: FusionInfo }) {
+  const alerts = useAlertPrefs();
   const [width, setWidth] = useState(0);
   const [pending, setPending] = useState<number | null>(null);
   const [scrub, setScrub] = useState<number | null>(null);
@@ -116,7 +146,9 @@ export function RainCard({ verdict, minutely, placeName, placeId }: { verdict: U
   const source =
     verdict.now.source === 'station' && st
       ? `${verdict.now.wet ? 'Pluie mesurée' : 'Mesure'} à ${st.name} (${st.distanceKm < 1 ? '< 1' : Math.round(st.distanceKm)} km) · il y a ${st.ageMin} min`
-      : null;
+      : verdict.now.source === 'radar' && info?.ageMin != null
+        ? `Radar · image d'il y a ${info.ageMin} min${info.motion ? ` · la pluie arrive ${windFrom(info.motion.fromDeg)} à ${Math.round(info.motion.kmh)} km/h` : ''}`
+        : null;
 
   // Lecture au doigt : heure, intensité, cumul d'ici là
   const sel = scrub !== null ? slots[scrub] : null;
@@ -130,6 +162,12 @@ export function RainCard({ verdict, minutely, placeName, placeId }: { verdict: U
       </View>
       <T style={styles.detail}>{verdict.detail}</T>
       {source ? <T style={styles.source}>{source}</T> : null}
+      {verdict.confidence && verdict.need !== 'no' ? (
+        <View style={styles.confRow}>
+          <Icon name={verdict.confidence.high ? { ios: 'checkmark.seal.fill', android: 'verified' } : { ios: 'exclamationmark.triangle.fill', android: 'warning' }} size={12} color={verdict.confidence.high ? '#30D158' : '#FFD60A'} />
+          <T style={styles.source}>{verdict.confidence.text}</T>
+        </View>
+      ) : null}
 
       {verdict.dryWindow ? (
         <View style={styles.chip}>
@@ -202,6 +240,15 @@ export function RainCard({ verdict, minutely, placeName, placeId }: { verdict: U
           <T style={styles.buttonText}>{pending !== null ? `Rappel prévu${pending > 0 ? ` à ${time(pending)}` : ''} · Annuler` : verdict.reminder!.label}</T>
         </Pressable>
       ) : null}
+      {alerts ? (
+        <Pressable onPress={() => editAlerts(alerts)} style={styles.alertsRow} accessibilityRole="button">
+          <Icon name={{ ios: alerts.scope === 'off' ? 'bell.slash' : 'bell.badge', android: 'notifications' }} size={13} color={DIM} />
+          <T style={styles.alertsText}>
+            {alerts.scope === 'off' ? 'Alertes pluie désactivées' : `Alertes pluie : ${SCOPE_LABEL[alerts.scope]}, ${LEVEL_LABEL[alerts.level]}`}
+          </T>
+          <Icon name={{ ios: 'chevron.right', android: 'chevron_right' }} size={11} color={DIM} />
+        </Pressable>
+      ) : null}
     </Glass>
   );
 }
@@ -225,4 +272,7 @@ const styles = StyleSheet.create({
   label: { position: 'absolute', width: 48, fontSize: 12, color: DIM },
   button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)' },
   buttonText: { fontSize: 15, fontWeight: '600' },
+  confRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  alertsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: LINE },
+  alertsText: { flex: 1, fontSize: 13, color: DIM },
 });

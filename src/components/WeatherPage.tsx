@@ -8,7 +8,7 @@ import { ActivityIndicator, Animated, type HostInstance, Platform, Pressable, Re
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { minutesUntilRain } from '../lib/forecast';
 import { temp, time } from '../lib/format';
-import { notifyRain } from '../lib/notifications';
+import { alertThreshold, getAlertPrefs, notifyRain } from '../lib/notifications';
 import { backgroundFor } from '../lib/sky';
 import type { Place } from '../lib/types';
 import { fetchNearestObservation } from '../lib/observations';
@@ -18,6 +18,8 @@ import { useForecast } from '../lib/useForecast';
 import { weatherLabel } from '../lib/weatherCodes';
 import { headerLabel } from '../lib/rain';
 import { umbrellaVerdict } from '../lib/umbrella';
+import { fetchRadarPoint } from '../lib/radarPoint';
+import { fuseRain } from '../lib/rainFusion';
 import { AirCard } from './AirCard';
 import { PageFooter, WindCard } from './DetailCards';
 import { RadarPreview } from './RadarPreview';
@@ -45,12 +47,6 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
   const insets = inSheet ? { ...safe, top: 44 } : safe;
   const { forecast, loading, error, refresh } = useForecast(place);
 
-  useEffect(() => {
-    if (!forecast || !place.isGps) return;
-    const mins = minutesUntilRain(forecast.minutely);
-    if (mins !== null && mins > 0) notifyRain(place.name, mins);
-  }, [forecast, place]);
-
   const c = forecast?.current;
   const colors = c ? backgroundFor(c.weatherCode, c.isDay) : (['#2B5C9E', '#4D7FBF', '#7FA6D6'] as const);
   const today = forecast?.daily[0];
@@ -71,7 +67,22 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
     gusts: windMeasured && obs!.windGusts != null ? obs!.windGusts : (c?.windGusts ?? 0),
   };
   // Réponse « parapluie » : mesure de station + prévision ; elle corrige aussi le libellé de l'en-tête.
-  const verdict = useMemo(() => (forecast ? umbrellaVerdict(forecast.minutely, forecast.hourly, place.name, obs) : null), [forecast, place.name, obs]);
+  // Radar au-dessus du lieu (toutes les 5 min), fondu avec AROME pour les 90 prochaines minutes.
+  const radar = useCached(forecast ? `radarpt:${placeKey(place)}:${Math.floor(Date.now() / 300000)}` : null, () => fetchRadarPoint(place.latitude, place.longitude), 5 * 60 * 1000);
+  const fused = useMemo(() => (forecast ? fuseRain(forecast.minutely, radar) : null), [forecast, radar]);
+  const verdict = useMemo(
+    () => (forecast && fused ? umbrellaVerdict(fused.minutely, forecast.hourly, place.name, obs, fused.info) : null),
+    [forecast, fused, place.name, obs],
+  );
+  // Alerte « pluie dans l'heure » selon les réglages (ma position seule, toutes les villes, ou aucune).
+  useEffect(() => {
+    if (!fused) return;
+    getAlertPrefs().then((p) => {
+      if (p.scope === 'off' || (p.scope === 'gps' && !place.isGps)) return;
+      const mins = minutesUntilRain(fused.minutely, alertThreshold(p));
+      if (mins !== null && mins > 0) notifyRain(placeKey(place), place.name, mins);
+    });
+  }, [fused, place]);
   const label = c ? headerLabel(weatherLabel(c.weatherCode, c.isDay), c.weatherCode, verdict ? verdict.now.wet : null, verdict?.now.mmh ?? 0, c.cloudCover) : '';
   const scrollY = useRef(new Animated.Value(0)).current;
   const bigOpacity = scrollY.interpolate({ inputRange: [0, 110], outputRange: [1, 0], extrapolate: 'clamp' });
@@ -146,7 +157,7 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
         {forecast ? (
           <>
             <VigilanceBanner department={place.department} />
-            {verdict ? <RainCard verdict={verdict} minutely={forecast.minutely} placeName={place.name} placeId={placeKey(place)} /> : null}
+            {verdict ? <RainCard verdict={verdict} minutely={fused?.minutely ?? forecast.minutely} placeName={place.name} placeId={placeKey(place)} info={fused?.info} /> : null}
             <HourlyCard hourly={forecast.hourly} daily={forecast.daily} mode={mode} onMode={setMode} />
             <Pressable onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
               <DailyCard daily={forecast.daily} hourly={forecast.hourly} currentTemp={forecast.current.temperature} mode={mode} />
