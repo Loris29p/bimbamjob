@@ -15,6 +15,13 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "4XG73853PP",
+        "ascApiKeyPath": "/Users/lorispoilly/.appstoreconnect/AuthKey_GRWSC9KJS7.p8",
+        "ascApiKeyIssuerId": "3b6968ab-f864-4893-9a0e-61b52701f4ba",
+        "ascApiKeyId": "GRWSC9KJS7"
+      }
+    }
   }
 }
