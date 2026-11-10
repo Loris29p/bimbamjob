@@ -1,7 +1,7 @@
 // Frise de lecture de la carte (lecture / pause, 3 h – 12 h, piste horaire), en natif
 // pour profiter du vrai « Liquid Glass » d'iOS 26 au-dessus de la carte (WebView).
 import { LinearGradient } from 'expo-linear-gradient';
-import { hourOf, timeOf as fmtTime } from '../lib/format';
+import { hourOf, timeOf as fmtTime, uses24h } from '../lib/format';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { tap, tick } from '../lib/hig';
@@ -37,7 +37,8 @@ const MODES: { m: '3h' | '12h'; label: string }[] = [
   { m: '12h', label: '12 h' },
 ];
 const LABEL_W = 58;
-const BUBBLE_W = 64;
+// « 22:26 » tient en 64 px ; « 10:26 PM » (téléphone réglé en 12 h) en demande davantage.
+const BUBBLE_W = uses24h ? 64 : 96;
 const TRACK_H = 10;
 const NEAR = 450; // à moins de 7 min 30 de l'heure actuelle, on parle de « maintenant »
 
