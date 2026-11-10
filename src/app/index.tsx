@@ -33,6 +33,8 @@ export default function Home() {
         data={places}
         horizontal
         pagingEnabled
+        // pas de rebond sur les bords : avec une seule ville, la page ne doit pas bouger du tout
+        bounces={false}
         showsHorizontalScrollIndicator={false}
         keyExtractor={placeKey}
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
