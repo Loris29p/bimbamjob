@@ -22,7 +22,8 @@ const TONE = { rain: RAIN_BLUE, snow: '#E5E5EA', storm: '#FF9F0A', maybe: '#FFD6
 /** mm/h → hauteur 0..1, une bande par niveau (faible · modérée · forte). */
 function level(mmh: number) {
   if (mmh < RAIN_MMH) return 0;
-  if (mmh < MODERATE_MMH) return ((mmh - RAIN_MMH) / (MODERATE_MMH - RAIN_MMH)) / 3 + 0.02;
+  // racine carrée : la bruine (0,2–1 mm/h) reste bien visible au lieu d'un trait au ras du sol
+  if (mmh < MODERATE_MMH) return 0.06 + Math.sqrt((mmh - RAIN_MMH) / (MODERATE_MMH - RAIN_MMH)) * (1 / 3 - 0.06);
   if (mmh < HEAVY_MMH) return 1 / 3 + ((mmh - MODERATE_MMH) / (HEAVY_MMH - MODERATE_MMH)) / 3;
   return 2 / 3 + Math.min(1, (mmh - HEAVY_MMH) / 12) / 3;
 }
