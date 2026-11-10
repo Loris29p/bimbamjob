@@ -141,7 +141,7 @@ export function WeatherPage({ place, bottomInset, inSheet = false }: { place: Pl
         {forecast ? (
           <>
             <VigilanceBanner department={place.department} />
-            <RainCard minutely={forecast.minutely} />
+            <RainCard minutely={forecast.minutely} hourly={forecast.hourly} placeName={place.name} placeId={placeKey(place)} />
             <HourlyCard hourly={forecast.hourly} daily={forecast.daily} mode={mode} onMode={setMode} />
             <Pressable onPress={() => router.push({ pathname: '/detail', params: { metric: mode } })}>
               <DailyCard daily={forecast.daily} hourly={forecast.hourly} currentTemp={forecast.current.temperature} mode={mode} />
